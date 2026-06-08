@@ -1,0 +1,13 @@
+{
+  "name": "talentbridge",
+  "version": "0.2.0",
+  "private": true,
+  "description": "AI 高端人才迁移识别助手",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check app.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

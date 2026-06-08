@@ -1,0 +1,8 @@
+.git
+.gitignore
+node_modules
+*.log
+__pycache__
+*.pyc
+test-fixtures
+*.md

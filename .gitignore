@@ -1,0 +1,7 @@
+prototype-server.log
+prototype-server.err.log
+talentbridge-server.log
+talentbridge-server.err.log
+__pycache__/
+*.pyc
+.tools/
