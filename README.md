@@ -38,6 +38,8 @@ API Key 仅由服务端读取，不会返回或写入浏览器。
 
 仓库包含 `Dockerfile`、`railway.json` 和 `render.yaml`，可直接部署到 Railway 或 Render。
 
+当前 Railway 生产服务连接 GitHub `main` 分支；推送到 `main` 后会自动构建和发布。
+
 生产环境必须由平台注入：
 
 - `PORT`：平台自动分配
