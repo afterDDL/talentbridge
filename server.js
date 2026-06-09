@@ -233,6 +233,21 @@ const companyResearchSchema = {
   }
 };
 
+const industryResearchPlanSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["industry", "coreTerms", "englishTerms", "valueChainTerms", "entityTerms", "academicQueries", "industryQueries"],
+  properties: {
+    industry: { type: "string" },
+    coreTerms: { type: "array", minItems: 3, maxItems: 12, items: { type: "string" } },
+    englishTerms: { type: "array", minItems: 3, maxItems: 12, items: { type: "string" } },
+    valueChainTerms: { type: "array", minItems: 3, maxItems: 10, items: { type: "string" } },
+    entityTerms: { type: "array", minItems: 3, maxItems: 10, items: { type: "string" } },
+    academicQueries: { type: "array", minItems: 1, maxItems: 4, items: { type: "string" } },
+    industryQueries: { type: "array", minItems: 2, maxItems: 6, items: { type: "string" } }
+  }
+};
+
 function sendJson(res, status, data) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -508,6 +523,51 @@ function researchKeywords(job) {
     .slice(0, 8);
 }
 
+function fallbackIndustryResearchPlan(job) {
+  const coreTerms = researchKeywords(job);
+  const englishTerms = researchEnglishTerms(job).split(/\s+/).filter(item => item.length >= 3);
+  return {
+    industry: String(job.industry || job.title || "未说明行业"),
+    coreTerms,
+    englishTerms,
+    valueChainTerms: ["上游", "中游", "下游", "产品", "客户", "供应商", "制造", "服务"],
+    entityTerms: [...coreTerms, ...englishTerms].slice(0, 10),
+    academicQueries: [[job.industry, job.title, ...englishTerms].filter(Boolean).join(" ")],
+    industryQueries: [
+      `${job.industry || job.title} 产业链 市场格局`,
+      `${job.industry || job.title} 技术路线 商业模式`
+    ]
+  };
+}
+
+async function buildIndustryResearchPlan(job) {
+  const fallback = fallbackIndustryResearchPlan(job);
+  if (!API_KEY) return fallback;
+  try {
+    return await callAI({
+      name: "industry_research_plan",
+      schema: industryResearchPlanSchema,
+      system: [
+        "你是跨行业研究规划器，只根据目标 JD 设计检索计划，不研究任何具体公司。",
+        "识别该岗位所属行业、核心产品/技术/业务术语、产业链角色和可能出现的集团/子公司业务描述。",
+        "生成适合公开网页与学术数据库检索的中英文关键词；不要局限于输入中的原词，要补充同义词、上位词和专业术语。",
+        "该方法必须适用于制造、互联网、金融、医药、消费、能源、专业服务等不同行业。",
+        "不输出公司事实，不判断候选人，不使用具体公司名称。"
+      ].join("\n"),
+      input: JSON.stringify({
+        title: job.title,
+        industry: job.industry,
+        jdText: job.jdText,
+        model: job.model,
+        adjacent: job.adjacent
+      })
+    });
+  } catch (error) {
+    console.warn("Industry research plan fallback:", error.message);
+    return fallback;
+  }
+}
+
 function companySearchSignals(company) {
   const core = String(company)
     .replace(/(?:有限责任公司|股份有限公司|有限公司|控股集团|集团|公司|企业)$/g, "")
@@ -530,7 +590,7 @@ function searchResultMatchesCompany(result, company) {
   return !signals.length || signals.some(signal => haystack.includes(signal.toLowerCase()));
 }
 
-function entityMatchesResearch(entity, job) {
+function entityMatchesResearch(entity, job, researchPlan) {
   const haystack = [
     entity.labels?.zh?.value,
     entity.labels?.en?.value,
@@ -540,9 +600,11 @@ function entityMatchesResearch(entity, job) {
     ...(entity.aliases?.en || []).map(item => item.value)
   ].filter(Boolean).join(" ").toLowerCase();
   const terms = [
-    ...researchKeywords(job),
-    job.industry,
-    researchEnglishTerms(job)
+    ...(researchPlan?.coreTerms || researchKeywords(job)),
+    ...(researchPlan?.englishTerms || []),
+    ...(researchPlan?.entityTerms || []),
+    ...(researchPlan?.valueChainTerms || []),
+    job.industry
   ].filter(Boolean).flatMap(item => String(item).toLowerCase().split(/[、/，,\s]+/)).filter(item => item.length >= 2);
   return terms.some(term => haystack.includes(term));
 }
@@ -605,7 +667,7 @@ async function wikidataReverseLinkedEntityIds(entityId) {
   }
 }
 
-async function entitySourceBundle(entity, entityId, relationship, job) {
+async function entitySourceBundle(entity, entityId, relationship, job, researchPlan) {
   const label = entity.labels?.zh?.value || entity.labels?.en?.value || entityId;
   const description = entity.descriptions?.zh?.value || entity.descriptions?.en?.value || "";
   const aliases = [...(entity.aliases?.zh || []), ...(entity.aliases?.en || [])].map(item => item.value).slice(0, 10);
@@ -629,7 +691,7 @@ async function entitySourceBundle(entity, entityId, relationship, job) {
   }
   const names = [label, ...(entity.aliases?.zh || []).map(item => item.value), ...(entity.aliases?.en || []).map(item => item.value)]
     .filter(Boolean).slice(0, 6);
-  return { sources, pageCandidates, names, relationship, relevant: entityMatchesResearch(entity, job) };
+  return { sources, pageCandidates, names, relationship, relevant: entityMatchesResearch(entity, job, researchPlan) };
 }
 
 function classifyResearchSource(url, requestedLevel = "") {
@@ -674,7 +736,7 @@ async function searchResearchWeb(queries) {
   return [...unique.values()];
 }
 
-async function discoverStructuredCompanySources(company, job) {
+async function discoverStructuredCompanySources(company, job, researchPlan) {
   const directSources = [];
   const pageCandidates = [];
   const entityNames = [company];
@@ -734,7 +796,7 @@ async function discoverStructuredCompanySources(company, job) {
     }
     const linkedEntities = await Promise.all(linkedValues.map(linked => {
       const linkedEntity = linkedEntityMap[linked.id];
-      return linkedEntity ? entitySourceBundle(linkedEntity, linked.id, linked.relationship, job) : null;
+      return linkedEntity ? entitySourceBundle(linkedEntity, linked.id, linked.relationship, job, researchPlan) : null;
     }));
     linkedEntities.filter(bundle => bundle?.relevant).slice(0, 4).forEach(bundle => {
       directSources.push(...bundle.sources);
@@ -771,8 +833,8 @@ async function discoverStructuredCompanySources(company, job) {
   return { directSources, pageCandidates, officialHost, entityNames: [...new Set(entityNames)], resolvedEntities };
 }
 
-async function discoverCompanyPages(company, job, officialHost = "", entityNames = [company]) {
-  const keywordText = researchKeywords(job).slice(0, 5).join(" ");
+async function discoverCompanyPages(company, job, researchPlan, officialHost = "", entityNames = [company]) {
+  const keywordText = [...(researchPlan.coreTerms || []), ...(researchPlan.englishTerms || [])].slice(0, 8).join(" ");
   const researchNames = [...new Set(entityNames)].slice(0, 5);
   const queries = [
     ...researchNames.flatMap(name => [
@@ -838,12 +900,8 @@ function researchEnglishTerms(job) {
   return [...new Set(dictionary.filter(([pattern]) => pattern.test(text)).map(([, term]) => term))].join(" ");
 }
 
-async function discoverOpenAlexIndustrySources(job) {
-  const terms = researchKeywords(job).slice(0, 5);
-  const queries = [
-    [job.industry, job.title, ...terms].filter(Boolean).join(" "),
-    researchEnglishTerms(job)
-  ].filter(Boolean);
+async function discoverOpenAlexIndustrySources(job, researchPlan) {
+  const queries = (researchPlan.academicQueries || []).filter(Boolean);
   if (!queries.length) return [];
   try {
     const groups = await Promise.all(queries.map(async query => {
@@ -855,9 +913,8 @@ async function discoverOpenAlexIndustrySources(job) {
     groups.flat().forEach(work => {
       if (!uniqueWorks.has(work.id)) uniqueWorks.set(work.id, work);
     });
-    const focusTerms = researchEnglishTerms(job)
-      .toLowerCase()
-      .split(/\s+/)
+    const focusTerms = [...(researchPlan.englishTerms || []), ...(researchPlan.coreTerms || [])]
+      .flatMap(item => String(item).toLowerCase().split(/\s+/))
       .filter(term => term.length >= 4 && !["with", "service", "energy"].includes(term));
     return [...uniqueWorks.values()].map(work => {
       const abstract = openAlexAbstract(work.abstract_inverted_index);
@@ -893,11 +950,11 @@ async function discoverOpenAlexIndustrySources(job) {
   }
 }
 
-async function discoverIndustryPages(job) {
-  const terms = researchKeywords(job);
+async function discoverIndustryPages(job, researchPlan) {
+  const terms = researchPlan.coreTerms || researchKeywords(job);
   const industry = String(job.industry || job.title || "").trim();
   const topic = terms.slice(0, 4).join(" ");
-  const queries = [
+  const queries = [...(researchPlan.industryQueries || []),
     `"${industry}" 产业链 市场格局 竞争格局`,
     `"${industry}" 技术路线 量产 工艺 趋势`,
     `"${topic}" 行业报告 技术 对比`,
@@ -913,12 +970,12 @@ async function discoverIndustryPages(job) {
   }).map(item => ({ ...item, evidenceLevel: "行业研究" })).slice(0, 8);
 }
 
-async function collectCompanySources(company, job) {
-  const structured = await discoverStructuredCompanySources(company, job);
+async function collectCompanySources(company, job, researchPlan) {
+  const structured = await discoverStructuredCompanySources(company, job, researchPlan);
   const [companyPages, industryPages, academicSources] = await Promise.all([
-    discoverCompanyPages(company, job, structured.officialHost, structured.entityNames),
-    discoverIndustryPages(job),
-    discoverOpenAlexIndustrySources(job)
+    discoverCompanyPages(company, job, researchPlan, structured.officialHost, structured.entityNames),
+    discoverIndustryPages(job, researchPlan),
+    discoverOpenAlexIndustrySources(job, researchPlan)
   ]);
   const results = [...structured.pageCandidates, ...companyPages, ...industryPages];
   const sources = [...structured.directSources, ...academicSources.slice(0, 2)]
@@ -1070,11 +1127,12 @@ async function researchCompany(payload) {
   if (!company || /^(?:未说明|手动导入|未知|候选人)$/i.test(company)) {
     return insufficientCompanyResearch(company || "未说明", "简历未提供可检索的企业名称");
   }
-  const cacheKey = `${company}::${job.title || ""}::${researchKeywords(job).join("|")}`;
+  const researchPlan = await buildIndustryResearchPlan(job);
+  const cacheKey = `${company}::${job.title || ""}::${[...researchPlan.coreTerms, ...researchPlan.englishTerms].join("|")}`;
   const cached = companyResearchCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < COMPANY_RESEARCH_TTL_MS) return cached.result;
 
-  const researchBundle = await collectCompanySources(company, job);
+  const researchBundle = await collectCompanySources(company, job, researchPlan);
   const sources = researchBundle.sources;
   if (!sources.length) {
     const result = insufficientCompanyResearch(company, "未找到可核验的公开网页", [], researchBundle.resolvedEntities);
@@ -1099,7 +1157,7 @@ async function researchCompany(payload) {
     name: "industry_research_skill",
     schema: companyResearchSchema,
     system: industryResearchSkill.SYSTEM_PROMPT,
-    input: `简历所列企业：${company}\n候选人岗位：${payload.role || "未说明"}\n目标岗位：${JSON.stringify(job)}\n预识别关联主体：${JSON.stringify(researchBundle.resolvedEntities)}\n\n公开网页：\n${sourceInput}`
+    input: `简历所列企业：${company}\n候选人岗位：${payload.role || "未说明"}\n目标岗位：${JSON.stringify(job)}\n动态行业研究计划：${JSON.stringify(researchPlan)}\n预识别关联主体：${JSON.stringify(researchBundle.resolvedEntities)}\n\n公开网页：\n${sourceInput}`
   });
   const sanitizedResult = sanitizeCompanyResearchEvidence(result);
   const selectedIds = referencedResearchSourceIds(sanitizedResult);

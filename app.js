@@ -1478,7 +1478,7 @@ function archiveCompanyResearch(candidate, job) {
 }
 
 async function ensureCompanyResearch(candidate, force = false) {
-  if (!candidate || (!force && (candidate.companyResearch?.status === "loading" || candidate.companyResearch?.skill === "industry-research-v3"))) return;
+  if (!candidate || (!force && (candidate.companyResearch?.status === "loading" || candidate.companyResearch?.skill === "industry-research-v4"))) return;
   const job = currentJob();
   candidate.companyResearch = { status: "loading" };
   renderCandidateDetail(candidate.id);
@@ -1577,7 +1577,7 @@ function renderCandidateDetail(candidateId) {
         </div>
       </div>
     </section>`;
-  if (!c.companyResearch || (!["loading", "error"].includes(c.companyResearch.status) && c.companyResearch.skill !== "industry-research-v3")) {
+  if (!c.companyResearch || (!["loading", "error"].includes(c.companyResearch.status) && c.companyResearch.skill !== "industry-research-v4")) {
     void ensureCompanyResearch(c);
   }
 }
