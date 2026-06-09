@@ -206,7 +206,8 @@ const knowledgePacks = {
       "候选人具体负责哪些制程模块和关键参数？",
       "是否承担过量产良率或可靠性结果责任？",
       "目标岗位特有的混合键合、减薄或超细间距经验是否具备？"
-    ]
+    ],
+    companyProfiles: []
   },
   "enterprise-sales": {
     id: "enterprise-sales",
@@ -233,7 +234,8 @@ const knowledgePacks = {
       "最大项目的决策链、销售周期和合同规模如何？",
       "候选人如何将客户问题转化为可交付方案？",
       "是否承担续约、增购、回款或长期客户经营责任？"
-    ]
+    ],
+    companyProfiles: []
   }
 };
 
@@ -761,6 +763,7 @@ function renderKnowledgeBase() {
                 ${knowledgeSection("正向迁移规则", "什么经历虽然名称不同，但底层任务和能力可以迁移", "positiveRules", pack.positiveRules)}
                 ${knowledgeSection("反向风险规则", "哪些表面相关经历不能直接视为胜任证据", "riskRules", pack.riskRules)}
                 ${knowledgeSection("建议验证问题", "当证据不足时，HR 应该如何向候选人确认", "questions", pack.questions)}
+                ${companyProfileSection(pack)}
               </div>
             </div>
             <div class="card ai-summary">
@@ -772,6 +775,30 @@ function renderKnowledgeBase() {
             </div>
           </div>
         </div>
+      </div>
+    </section>`;
+}
+
+function companyProfileSection(pack) {
+  const profiles = pack.companyProfiles || [];
+  return `
+    <section class="knowledge-section company-profile-section">
+      <header><div><h3>企业产品与技术地图</h3><p>由候选人复核中的联网研究自动沉淀，帮助 HR 学习行业公司与目标岗位的关系</p></div><span class="tag blue">${profiles.length} 家企业</span></header>
+      <div class="company-profile-list">
+        ${profiles.length ? profiles.map(profile => `
+          <article class="company-profile-card">
+            <div class="company-profile-head">
+              <div><strong>${escapeHtml(profile.company)}</strong><span>${escapeHtml(profile.role || "关联岗位未说明")}</span></div>
+              <span class="tag ${profile.fit === "高" ? "green" : profile.fit === "中" ? "amber" : profile.fit === "低" ? "red" : "gray"}">JD 适配 ${escapeHtml(profile.fit)}</span>
+            </div>
+            <p>${escapeHtml(profile.summary)}</p>
+            <div class="research-tags">${[...(profile.products || []), ...(profile.technologies || [])].slice(0, 6).map(item => `<span>${escapeHtml(item)}</span>`).join("")}</div>
+            <div class="company-profile-insight"><span>HR 学习重点</span>${(profile.fitReasons || []).slice(0, 2).map(item => `<p>+ ${escapeHtml(item)}</p>`).join("")}${(profile.gaps || []).slice(0, 1).map(item => `<p>· ${escapeHtml(item)}</p>`).join("")}</div>
+            <footer>
+              <span>更新于 ${profile.researchedAt ? new Date(profile.researchedAt).toLocaleDateString("zh-CN") : "刚刚"}</span>
+              <div>${(profile.sources || []).slice(0, 3).map(source => `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.domain || source.title)}</a>`).join("")}</div>
+            </footer>
+          </article>`).join("") : `<div class="knowledge-empty">完成候选人原司联网研究后，企业情报会自动出现在这里。</div>`}
       </div>
     </section>`;
 }
@@ -820,7 +847,15 @@ function buildKnowledgeContext(job) {
     terms: pack.terms,
     positiveRules: pack.positiveRules,
     riskRules: pack.riskRules,
-    questions: pack.questions
+    questions: pack.questions,
+    companyProfiles: (pack.companyProfiles || []).slice(-10).map(profile => ({
+      company: profile.company,
+      summary: profile.summary,
+      products: profile.products,
+      technologies: profile.technologies,
+      fit: profile.fit,
+      researchedAt: profile.researchedAt
+    }))
   };
 }
 
@@ -1296,6 +1331,116 @@ function comparabilityClass(judgment) {
   return judgment === "可比" ? "green" : judgment === "部分可比" ? "amber" : "gray";
 }
 
+function hrCapabilityPoints(candidate) {
+  const priority = { "可比": 0, "部分可比": 1, "未证实": 2 };
+  return comparabilityFor(candidate)
+    .slice()
+    .sort((a, b) => priority[a.judgment] - priority[b.judgment])
+    .slice(0, 3);
+}
+
+function companyResearchCard(candidate) {
+  const research = candidate.companyResearch;
+  if (!research || research.status === "loading") {
+    return `
+      <div class="company-research-state">
+        <span class="research-spinner"></span>
+        <div><strong>正在联网核验原司背景</strong><p>搜索公开网页，判断产品与技术方向是否贴近当前 JD。</p></div>
+      </div>`;
+  }
+  if (research.status === "error") {
+    return `
+      <div class="company-research-state">
+        <div><strong>联网研究暂时失败</strong><p>${escapeHtml(research.summary || "请稍后重试")}</p></div>
+        <button class="btn secondary small" data-action="research-company">重新研究</button>
+      </div>`;
+  }
+  const fitClass = research.fit === "高" ? "green" : research.fit === "中" ? "amber" : research.fit === "低" ? "red" : "gray";
+  return `
+    <div class="research-summary">
+      <div><span class="tag ${fitClass}">原司背景适配 ${escapeHtml(research.fit)}</span><strong>${escapeHtml(research.summary)}</strong></div>
+      <button class="btn ghost small" data-action="research-company">重新联网核验</button>
+    </div>
+    <div class="research-tags">
+      ${(research.products || []).slice(0, 3).map(item => `<span>${escapeHtml(item)}</span>`).join("")}
+      ${(research.technologies || []).slice(0, 4).map(item => `<span>${escapeHtml(item)}</span>`).join("")}
+    </div>
+    <div class="research-fit-grid">
+      <div><span>为什么可能相关</span>${(research.fitReasons || []).slice(0, 3).map(item => `<p>+ ${escapeHtml(item)}</p>`).join("")}</div>
+      <div><span>公开信息仍未证明</span>${(research.gaps || []).slice(0, 3).map(item => `<p>· ${escapeHtml(item)}</p>`).join("")}</div>
+    </div>
+    <div class="research-sources">
+      <span>公开来源 · ${research.researchedAt ? new Date(research.researchedAt).toLocaleDateString("zh-CN") : "刚刚"}</span>
+      <div>${(research.sources || []).map(source => `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(source.evidenceLevel || "公开网页")}">${escapeHtml(source.title || source.domain)}${source.evidenceLevel === "搜索摘要" ? " · 摘要" : ""}</a>`).join("") || `<em>未找到可引用来源</em>`}</div>
+    </div>
+    <p class="research-disclaimer">企业背景适配只说明候选人可能接触过相近环境，不代表其本人掌握对应技术。</p>`;
+}
+
+function ensureJobKnowledgePack(job) {
+  if (job.knowledgePackId && knowledgePacks[job.knowledgePackId]) {
+    const pack = knowledgePacks[job.knowledgePackId];
+    if (!Array.isArray(pack.companyProfiles)) pack.companyProfiles = [];
+    return pack;
+  }
+  const id = `job-pack-${job.id}`;
+  knowledgePacks[id] = knowledgePacks[id] || {
+    id,
+    name: `${job.title}研究知识包`,
+    industry: job.industry || "自定义行业",
+    description: "由岗位校准、候选人复核和企业公开信息研究持续沉淀。",
+    terms: (job.model || []).slice(0, 5).map(item => [item[0], item[1] || "岗位核心能力"]),
+    positiveRules: ["仅在任务、技术、复杂度、阶段和责任边界具备可比证据时判断迁移成立"],
+    riskRules: ["企业产品技术背景相关，不等于候选人本人具备对应能力"],
+    questions: ["候选人在该产品或技术平台中具体负责什么？"],
+    companyProfiles: []
+  };
+  job.knowledgePackId = id;
+  return knowledgePacks[id];
+}
+
+function archiveCompanyResearch(candidate, job) {
+  const research = candidate.companyResearch;
+  if (!research || research.status !== "researched") return false;
+  const pack = ensureJobKnowledgePack(job);
+  const profile = {
+    company: research.company || candidate.company,
+    role: candidate.role,
+    summary: research.summary,
+    products: research.products || [],
+    technologies: research.technologies || [],
+    fit: research.fit,
+    fitReasons: research.fitReasons || [],
+    gaps: research.gaps || [],
+    sources: research.sources || [],
+    researchedAt: research.researchedAt
+  };
+  const existingIndex = pack.companyProfiles.findIndex(item => item.company === profile.company);
+  if (existingIndex >= 0) pack.companyProfiles[existingIndex] = profile;
+  else pack.companyProfiles.unshift(profile);
+  pack.companyProfiles = pack.companyProfiles.slice(0, 30);
+  return true;
+}
+
+async function ensureCompanyResearch(candidate, force = false) {
+  if (!candidate || (!force && candidate.companyResearch)) return;
+  const job = currentJob();
+  candidate.companyResearch = { status: "loading" };
+  renderCandidateDetail(candidate.id);
+  try {
+    candidate.companyResearch = await apiRequest("/api/research-company", {
+      company: candidate.company,
+      role: candidate.role,
+      job: analysisJobPayload(job)
+    });
+  } catch (error) {
+    candidate.companyResearch = { status: "error", summary: error.message };
+  }
+  const archived = archiveCompanyResearch(candidate, job);
+  saveState();
+  if (state.currentJob === job.id && state.selectedCandidate === candidate.id) renderCandidateDetail(candidate.id);
+  if (archived) toast("企业研究已加入岗位知识库", `${candidate.company}的产品与技术情报已沉淀`);
+}
+
 function renderCandidateDetail(candidateId) {
   const job = currentJob();
   const c = job.candidates.find(item => item.id === candidateId);
@@ -1306,7 +1451,7 @@ function renderCandidateDetail(candidateId) {
   renderRecentJobs();
   const verdictClass = c.group === "priority" ? "green" : c.group === "review" ? "blue" : c.group === "unknown" ? "amber" : "gray";
   const companyContext = companyContextFor(c);
-  const comparability = comparabilityFor(c);
+  const capabilityPoints = hrCapabilityPoints(c);
   const transferBoundary = transferBoundaryFor(c);
   const confidence = c.transferConfidence || (c.group === "priority" ? "中" : "低");
   main.innerHTML = `
@@ -1319,79 +1464,50 @@ function renderCandidateDetail(candidateId) {
         </div>
       </div>
       <div class="page-body">
-        <div class="detail-layout">
+        <div class="decision-page-grid">
           <div class="stack">
-            <div class="card">
+            <div class="card decision-hero">
               <div class="card-body">
                 <div class="candidate-hero">
                   <div class="candidate-profile">
                     <span class="person-avatar">${c.name.slice(-1)}</span>
-                    <div><h2>${c.name} ${c.recovered ? `<span class="tag cyan">AI 新找回</span>` : ""} ${c.privacyProtected ? `<span class="tag purple">隐私模式</span>` : ""}</h2><p>${c.role} · ${c.company}${c.privacyProtected ? ` · ${c.privacySummary || "原文仅存当前浏览器"}` : ""}</p></div>
+                    <div><h2>${c.name} ${c.recovered ? `<span class="tag cyan">AI 新找回</span>` : ""} ${c.privacyProtected ? `<span class="tag purple">隐私模式</span>` : ""}</h2><p>${c.role} · ${c.company}</p></div>
                   </div>
-                  <span class="tag ${verdictClass}">${c.verdict}</span>
+                  <div class="decision-verdict"><span class="tag ${verdictClass}">${c.verdict}</span><small>迁移置信度 ${confidence}</small></div>
                 </div>
-                <div class="verdict"><strong>${c.verdict}：${c.core}</strong><p>迁移判断置信度：${confidence}。${c.recovered ? "传统 ATS 未命中，但候选人在部分关键维度存在可比证据；这不等于直接具备目标岗位经验。" : "系统根据直接证据、岗位要求及信息完整度生成该建议。"} 关键缺口：${c.gap}。</p></div>
+                <h3>${c.core}</h3>
+                <p>${c.recovered ? "关键词未命中，但有部分关键能力值得 HR 进一步验证。" : "请结合下方能力证据与风险边界作人工判断。"}</p>
               </div>
             </div>
+
             <div class="card">
-              <div class="card-head"><div><h2>原公司产品与技术背景</h2><p>只呈现简历有证据支持的背景，不根据公司名称补充外部推测</p></div><span class="tag ${confidence === "高" ? "green" : confidence === "中" ? "amber" : "gray"}">迁移置信度 ${confidence}</span></div>
-              <div class="card-body">
-                <div class="company-context-grid">
-                  <div><span>公司 / 业务类型</span><strong>${companyContext.companyType}</strong></div>
-                  <div><span>产品或服务形态</span><strong>${companyContext.products.join("、")}</strong></div>
-                  <div><span>技术 / 业务平台</span><strong>${companyContext.technologyPlatform.join("、")}</strong></div>
-                  <div><span>所处阶段</span><strong>${companyContext.productionStage}</strong></div>
-                </div>
-                <p class="context-note">${companyContext.evidenceNote}</p>
+              <div class="card-head"><div><h2>HR 应重点判断的能力</h2><p>只保留最影响是否联系候选人的三个能力点</p></div></div>
+              <div class="card-body capability-focus-list">
+                ${capabilityPoints.map(item => `
+                  <div class="capability-focus">
+                    <span class="tag ${comparabilityClass(item.judgment)}">${item.judgment}</span>
+                    <div><strong>${item.dimension}：${item.candidateEvidence}</strong><p>${item.reason}</p><small>目标要求：${item.targetRequirement}</small></div>
+                  </div>`).join("")}
               </div>
             </div>
-            <div class="card">
-              <div class="card-head"><div><h2>迁移可比条件</h2><p>逐项判断经历是否真的处于可比较的业务与技术条件下</p></div></div>
-              <div class="card-body" style="padding-top:6px">
-                <table class="comparability-table">
-                  <thead><tr><th>维度</th><th>候选人证据</th><th>目标岗位要求</th><th>判断</th><th>判断理由</th></tr></thead>
-                  <tbody>${comparability.map(item => `<tr><td><strong>${item.dimension}</strong></td><td>${item.candidateEvidence}</td><td>${item.targetRequirement}</td><td><span class="tag ${comparabilityClass(item.judgment)}">${item.judgment}</span></td><td>${item.reason}</td></tr>`).join("")}</tbody>
-                </table>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-head"><div><h2>能力迁移路径</h2><p>仅保留已被可比条件支持的迁移项</p></div></div>
-              <div class="card-body">
-                <div class="legend"><span><i style="background:var(--green)"></i>简历事实</span><span><i style="background:var(--purple)"></i>AI 推断</span><span><i style="background:var(--amber)"></i>待人工验证</span></div>
-                <div class="migration-map">
-                  <div class="map-column"><h4>候选人做过什么</h4>${c.facts.map(x => `<div class="map-node fact">${x}</div>`).join("")}</div>
-                  <div class="map-arrow">→</div>
-                  <div class="map-column center"><h4>有证据支持的可迁移能力</h4>${c.transferable.map(x => `<div class="map-node infer">${x}</div>`).join("")}</div>
-                  <div class="map-arrow">→</div>
-                  <div class="map-column target"><h4>目标岗位需要什么</h4>${c.target.map(x => `<div class="map-node">${x}</div>`).join("")}${c.verify.slice(0,2).map(x => `<div class="map-node verify">${x} · 待验证</div>`).join("")}</div>
-                </div>
-              </div>
-            </div>
-            <div class="card transfer-boundary-card">
-              <div class="card-head"><div><h2>不可直接外推</h2><p>相邻经历不等于目标岗位直接经验</p></div></div>
-              <div class="card-body"><ul class="boundary-list">${transferBoundary.map(item => `<li>${item}</li>`).join("")}</ul></div>
-            </div>
-            <div class="card">
-              <div class="card-head"><div><h2>证据与判断依据</h2><p>事实、推断和缺口分开展示</p></div></div>
-              <div class="card-body" style="padding-top:6px">
-                <table class="evidence-table">
-                  <tr><th>类型</th><th>内容</th><th>来源</th></tr>
-                  <tr><td><span class="tag green">简历事实</span></td><td><div class="quote">“${c.quote}”</div></td><td class="tiny">候选人简历</td></tr>
-                  <tr><td><span class="tag blue">背景约束</span></td><td>${companyContext.products.join("、")}；${companyContext.technologyPlatform.join("、")}；${companyContext.productionStage}</td><td class="tiny">候选人简历</td></tr>
-                  <tr><td><span class="tag purple">AI 推断</span></td><td>${c.transferable.join("、")}。仅在上述可比条件成立时可迁移。</td><td class="tiny">五维可比分析</td></tr>
-                  <tr><td><span class="tag red">外推边界</span></td><td>${transferBoundary.join("；")}</td><td class="tiny">保守判断规则</td></tr>
-                  <tr><td><span class="tag amber">待验证</span></td><td>${c.verify.join("、")}</td><td class="tiny">简历暂未提供证据</td></tr>
-                </table>
-              </div>
+
+            <div class="card company-research-card">
+              <div class="card-head"><div><h2>原司公开背景与 JD 适配</h2><p>联网搜索企业产品和技术方向，不把企业背景等同于个人能力</p></div></div>
+              <div class="card-body">${companyResearchCard(c)}</div>
             </div>
           </div>
-          <aside class="stack">
-            <div class="card">
-              <div class="card-head"><div><p class="eyebrow">建议行动</p><h3>首次沟通重点确认</h3></div></div>
-              <div class="card-body"><ol class="question-list">${c.questions.map(x => `<li>${x}</li>`).join("")}</ol></div>
+
+          <aside class="stack decision-sidebar">
+            <div class="card risk-card">
+              <div class="card-head"><div><h3>联系前要想清楚</h3><p>最可能造成误判的边界</p></div></div>
+              <div class="card-body"><ul class="decision-risk-list">${transferBoundary.slice(0, 3).map(item => `<li>${item}</li>`).join("")}</ul></div>
             </div>
             <div class="card">
-              <div class="card-head"><div><h3>你的判断</h3><p>反馈会更新当前岗位的排序偏好</p></div></div>
+              <div class="card-head"><div><h3>首次沟通问什么</h3><p>用三个问题验证迁移是否成立</p></div></div>
+              <div class="card-body"><ol class="question-list">${c.questions.slice(0, 3).map(x => `<li>${x}</li>`).join("")}</ol></div>
+            </div>
+            <div class="card">
+              <div class="card-head"><div><h3>你的判断</h3></div></div>
               <div class="card-body">
                 <div class="decision-buttons">
                   <button class="btn primary" data-decision="优先联系">标记为优先联系</button>
@@ -1399,19 +1515,13 @@ function renderCandidateDetail(candidateId) {
                   <button class="btn secondary" data-decision="暂不匹配">暂不匹配</button>
                 </div>
                 <textarea class="decision-note" id="decisionNote" placeholder="补充判断理由（选填）"></textarea>
-                <p class="tiny" style="margin-bottom:0">AI 仅提供辅助分析，最终判断由招聘人员作出。</p>
-              </div>
-            </div>
-            <div class="card ai-summary">
-              <div class="card-body">
-                <p class="eyebrow">为什么不是一个总分？</p>
-                <p class="tiny" style="line-height:1.7;margin-bottom:0">中高端候选人的信息往往不完整。产品展示证据强弱和待验证项，避免用看似精确的数字掩盖不确定性。</p>
               </div>
             </div>
           </aside>
         </div>
       </div>
     </section>`;
+  if (!c.companyResearch) void ensureCompanyResearch(c);
 }
 
 function openImportModal(tab = "sample") {
@@ -1986,6 +2096,7 @@ function candidateReportMarkdown(candidate) {
   const job = currentJob();
   const decision = state.decisions[`${job.id}:${candidate.id}`];
   const companyContext = companyContextFor(candidate);
+  const companyResearch = candidate.companyResearch;
   const comparability = comparabilityFor(candidate);
   const transferBoundary = transferBoundaryFor(candidate);
   return `# ${candidate.name}｜能力迁移分析
@@ -2022,6 +2133,26 @@ ${candidate.facts.map(item => `- ${item}`).join("\n")}
 - 技术 / 业务平台：${companyContext.technologyPlatform.join("、")}
 - 所处阶段：${companyContext.productionStage}
 - 证据说明：${companyContext.evidenceNote}
+
+## 原司公开信息联网研究
+
+${companyResearch?.status === "researched" ? `- 与目标 JD 的背景适配：${companyResearch.fit}
+- 研究结论：${companyResearch.summary}
+- 主要产品 / 业务：${(companyResearch.products || []).join("、") || "公开信息不足"}
+- 主要技术方向：${(companyResearch.technologies || []).join("、") || "公开信息不足"}
+
+可能相关：
+${(companyResearch.fitReasons || []).map(item => `- ${item}`).join("\n") || "- 暂无充分公开证据"}
+
+仍需验证：
+${(companyResearch.gaps || []).map(item => `- ${item}`).join("\n") || "- 暂无"}
+
+公开来源：
+${(companyResearch.sources || []).map(source => `- [${source.title || source.domain}](${source.url})（${source.evidenceLevel || "公开网页"}）`).join("\n") || "- 未找到可引用来源"}
+
+> 企业背景适配只说明候选人可能接触过相近环境，不代表候选人本人掌握对应技术。` : companyResearch?.status === "insufficient" ? `${companyResearch.summary}
+
+${(companyResearch.sources || []).map(source => `- [${source.title || source.domain}](${source.url})`).join("\n") || "- 未找到可引用来源"}` : "尚未完成联网研究。"}
 
 ## 迁移可比条件
 
@@ -2246,6 +2377,10 @@ function handleClick(event) {
   if (action === "close-modal") closeModal();
   if (action === "view-resume") openOriginalResume();
   if (action === "close-resume") closeOriginalResume();
+  if (action === "research-company") {
+    const candidate = currentJob().candidates.find(item => item.id === state.selectedCandidate);
+    if (candidate) void ensureCompanyResearch(candidate, true);
+  }
   if (action === "delete-candidate") deleteSelectedCandidate();
   if (action === "delete-imported-candidate") deleteCandidate(actionEl.dataset.candidateId, true);
   if (action === "copy-resume") {
@@ -2342,7 +2477,8 @@ function handleClick(event) {
       terms: [["核心术语", "概念说明"]],
       positiveRules: ["新增一条正向迁移规则"],
       riskRules: ["新增一条反向风险规则"],
-      questions: ["新增一个建议验证问题"]
+      questions: ["新增一个建议验证问题"],
+      companyProfiles: []
     };
     state.selectedKnowledgePack = id;
     saveState();
