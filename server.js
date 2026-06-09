@@ -1019,6 +1019,7 @@ function sanitizeCompanyResearchEvidence(result) {
   const inferredEvidence = /必然涉及|通常具备|一般会|理应具备|必然会/;
   const sanitizeAbsenceClaim = value => String(value || "")
     .replace(/封装(?:环节|制造)?外包/g, "封装制造角色未由公开来源明确证明")
+    .replace(/未公开涉足([^，。；]+)/g, "公开信息未证明其参与$1")
     .replace(/未涉及([^，。；]+)/g, "未找到$1的公开证据");
   return {
     ...result,
