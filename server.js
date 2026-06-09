@@ -410,9 +410,34 @@ async function analyzeJob(payload) {
   return { result, mode: AI_PROVIDER, provider: AI_PROVIDER, model: MODEL };
 }
 
+function enforceTransferThreshold(result) {
+  if (!Array.isArray(result.comparability)) return result;
+  const byDimension = Object.fromEntries(result.comparability.map(item => [item.dimension, item]));
+  const supported = result.comparability.filter(item => item.judgment !== "未证实").length;
+  const fullyComparable = result.comparability.filter(item => item.judgment === "可比").length;
+  const anchorSupported = ["任务对象", "技术机理"].some(dimension => byDimension[dimension]?.judgment !== "未证实");
+  const responsibilitySupported = byDimension["个人责任"]?.judgment !== "未证实";
+  const eligibleForTransferReview = supported >= 3 && fullyComparable >= 2 && anchorSupported && responsibilitySupported;
+
+  if (!result.ats && !eligibleForTransferReview) {
+    result.group = "unknown";
+    result.verdict = "信息不足";
+    result.recovered = false;
+    result.transferConfidence = "低";
+    result.coverage = Math.min(Number(result.coverage) || 0, 49);
+    result.transferable = (result.transferable || []).map(item => `待验证线索：${item.replace(/^待验证线索：/, "")}`);
+  }
+  if (result.recovered) {
+    result.group = "review";
+    result.verdict = "值得复核";
+    result.transferConfidence = result.transferConfidence === "高" ? "中" : result.transferConfidence;
+  }
+  return result;
+}
+
 async function analyzeResume(payload) {
   if (!API_KEY) return { result: demoAnalyzeResume(payload), mode: "demo" };
-  const result = await callAI({
+  const result = enforceTransferThreshold(await callAI({
     name: "candidate_transfer_analysis",
     schema: resumeSchema,
     system: [
@@ -423,7 +448,7 @@ async function analyzeResume(payload) {
       "必须单独提取候选人原公司的产品形态、技术平台、工艺或业务代际、研发/试产/量产阶段；简历未写明时明确写“未说明”，不得依靠公司名称猜测。",
       "迁移判断必须逐项比较五个维度：任务对象、技术机理、问题复杂度、量产阶段、个人责任。",
       "“做过相似任务”“都负责良率/销售/项目”“同属一个行业”只能作为线索，不能单独证明能力可迁移。",
-      "只有五个维度中至少三项有明确可比证据，且任务对象或技术机理至少一项为“可比”，个人责任不存在明显降级，才可判为“值得复核”或 recovered=true。",
+      "只有五个维度中至少三项不是“未证实”、其中至少两项为“可比”、任务对象或技术机理至少一项不是“未证实”，且个人责任不是“未证实”，才可判为“值得复核”或 recovered=true。",
       "若公司产品技术背景、量产阶段或个人责任缺失，不得用行业常识补齐；transferConfidence 必须为“低”，通常应判为“信息不足”。",
       "“优先联系”仅用于目标技术/业务场景和责任范围均有直接证据的候选人；相邻经历默认最高为“值得复核”。",
       "transferable 只写已经被可比证据支持的能力；transferBoundary 明确列出不能从现有经历直接外推到目标岗位的部分。",
@@ -435,7 +460,7 @@ async function analyzeResume(payload) {
       "用简洁中文输出。"
     ].join("\n"),
     input: `目标岗位：\n${JSON.stringify(payload.job)}\n\n候选人简历：\n${payload.resume}`
-  });
+  }));
   return { result, mode: AI_PROVIDER, provider: AI_PROVIDER, model: MODEL };
 }
 
