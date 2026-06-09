@@ -700,11 +700,17 @@ async function discoverOpenAlexIndustrySources(job) {
     groups.flat().forEach(work => {
       if (!uniqueWorks.has(work.id)) uniqueWorks.set(work.id, work);
     });
+    const focusTerms = researchEnglishTerms(job)
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(term => term.length >= 4 && !["with", "service", "energy"].includes(term));
     return [...uniqueWorks.values()].map(work => {
       const abstract = openAlexAbstract(work.abstract_inverted_index);
       const venue = work.primary_location?.source?.display_name || "";
       const topics = (work.topics || []).slice(0, 4).map(item => item.display_name).filter(Boolean);
       const keywords = (work.keywords || []).slice(0, 6).map(item => item.display_name).filter(Boolean);
+      const relevanceText = `${work.title || ""} ${topics.join(" ")} ${keywords.join(" ")}`.toLowerCase();
+      const relevanceMatches = focusTerms.filter(term => relevanceText.includes(term)).length;
       const content = [
         work.title,
         abstract,
@@ -720,9 +726,12 @@ async function discoverOpenAlexIndustrySources(job) {
         domain: work.doi ? "doi.org" : "openalex.org",
         content: content.slice(0, 5000),
         evidenceLevel: "学术技术资料",
-        sourceCategory: "行业参照"
+        sourceCategory: "行业参照",
+        relevanceMatches
       };
-    }).filter(item => item.content.length >= 50).slice(0, 4);
+    }).filter(item => item.content.length >= 50 && (!focusTerms.length || item.relevanceMatches >= Math.min(2, focusTerms.length)))
+      .map(({ relevanceMatches, ...item }) => item)
+      .slice(0, 4);
   } catch (error) {
     console.warn("OpenAlex industry research failed:", error.message);
     return [];
