@@ -86,6 +86,7 @@ pip install -r requirements.txt
 - 可编辑的行业岗位知识包
 - 术语关系、正向迁移规则、反向风险和验证问题
 - 候选人原司产品与技术方向的联网研究，并附公开来源
+- 独立 Industry Research Skill：研究产业链位置、业务模式、客户应用、技术证据及逐条 JD 映射
 - 企业研究结果自动沉淀为当前岗位的“企业产品与技术地图”，供 HR 复用学习
 - JD 理解与岗位能力模型校准
 - JD、能力名称、能力说明及重要度编辑保存
@@ -115,5 +116,6 @@ pip install -r requirements.txt
 - `styles.css`：浅色企业工作台视觉样式
 - `app.js`：岗位数据、页面渲染和交互逻辑
 - `server.js`：静态文件服务与 AI 分析 API
+- `industry-research-skill.js`：企业与行业背景研究流程及证据约束
 - `parse_resume.py`：PDF、DOCX 和文本简历内容提取
 - `AI高端人才迁移识别助手-产品需求文档.md`：产品需求文档

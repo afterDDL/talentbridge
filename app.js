@@ -792,8 +792,12 @@ function companyProfileSection(pack) {
               <span class="tag ${profile.fit === "高" ? "green" : profile.fit === "中" ? "amber" : profile.fit === "低" ? "red" : "gray"}">JD 适配 ${escapeHtml(profile.fit)}</span>
             </div>
             <p>${escapeHtml(profile.summary)}</p>
+            <div class="company-profile-facts">
+              <span><small>产业链位置</small>${escapeHtml(profile.valueChainRole || "待研究")}</span>
+              <span><small>业务模式</small>${escapeHtml(profile.businessModel || "待研究")}</span>
+            </div>
             <div class="research-tags">${[...(profile.products || []), ...(profile.technologies || [])].slice(0, 6).map(item => `<span>${escapeHtml(item)}</span>`).join("")}</div>
-            <div class="company-profile-insight"><span>HR 学习重点</span>${(profile.fitReasons || []).slice(0, 2).map(item => `<p>+ ${escapeHtml(item)}</p>`).join("")}${(profile.gaps || []).slice(0, 1).map(item => `<p>· ${escapeHtml(item)}</p>`).join("")}</div>
+            <div class="company-profile-insight"><span>HR 学习重点</span>${(profile.hrInsights || profile.fitReasons || []).slice(0, 2).map(item => `<p>+ ${escapeHtml(item)}</p>`).join("")}${(profile.gaps || []).slice(0, 1).map(item => `<p>· ${escapeHtml(item)}</p>`).join("")}</div>
             <footer>
               <span>更新于 ${profile.researchedAt ? new Date(profile.researchedAt).toLocaleDateString("zh-CN") : "刚刚"}</span>
               <div>${(profile.sources || []).slice(0, 3).map(source => `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.domain || source.title)}</a>`).join("")}</div>
@@ -853,6 +857,11 @@ function buildKnowledgeContext(job) {
       summary: profile.summary,
       products: profile.products,
       technologies: profile.technologies,
+      industryPosition: profile.industryPosition,
+      valueChainRole: profile.valueChainRole,
+      businessModel: profile.businessModel,
+      customerMarkets: profile.customerMarkets,
+      operatingStage: profile.operatingStage,
       fit: profile.fit,
       researchedAt: profile.researchedAt
     }))
@@ -1356,19 +1365,39 @@ function companyResearchCard(candidate) {
       </div>`;
   }
   const fitClass = research.fit === "高" ? "green" : research.fit === "中" ? "amber" : research.fit === "低" ? "red" : "gray";
+  const relevanceClass = relevance => relevance === "直接相关" ? "green" : relevance === "相邻相关" ? "amber" : "gray";
   return `
     <div class="research-summary">
-      <div><span class="tag ${fitClass}">原司背景适配 ${escapeHtml(research.fit)}</span><strong>${escapeHtml(research.summary)}</strong></div>
+      <div><span class="tag blue">Industry Research Skill</span><span class="tag ${fitClass}">原司背景适配 ${escapeHtml(research.fit)}</span><strong>${escapeHtml(research.summary)}</strong></div>
       <button class="btn ghost small" data-action="research-company">重新联网核验</button>
+    </div>
+    <div class="industry-fact-grid">
+      <div><span>产业定位</span><strong>${escapeHtml(research.industryPosition || "待研究")}</strong></div>
+      <div><span>产业链位置</span><strong>${escapeHtml(research.valueChainRole || "待研究")}</strong></div>
+      <div><span>业务模式</span><strong>${escapeHtml(research.businessModel || "待研究")}</strong></div>
+      <div><span>业务阶段</span><strong>${escapeHtml(research.operatingStage || "待研究")}</strong></div>
     </div>
     <div class="research-tags">
       ${(research.products || []).slice(0, 3).map(item => `<span>${escapeHtml(item)}</span>`).join("")}
       ${(research.technologies || []).slice(0, 4).map(item => `<span>${escapeHtml(item)}</span>`).join("")}
     </div>
+    <div class="jd-research-map">
+      <span>企业背景与 JD 逐项映射</span>
+      ${(research.jdMapping || []).slice(0, 3).map(item => `
+        <div>
+          <span class="tag ${relevanceClass(item.relevance)}">${escapeHtml(item.relevance)}</span>
+          <p><strong>${escapeHtml(item.requirement)}</strong>${escapeHtml(item.companyEvidence)}</p>
+        </div>`).join("") || `<p>公开信息不足，暂不能建立逐项映射。</p>`}
+    </div>
     <div class="research-fit-grid">
-      <div><span>为什么可能相关</span>${(research.fitReasons || []).slice(0, 3).map(item => `<p>+ ${escapeHtml(item)}</p>`).join("")}</div>
+      <div><span>HR 应理解的业务背景</span>${(research.hrInsights || research.fitReasons || []).slice(0, 3).map(item => `<p>+ ${escapeHtml(item)}</p>`).join("")}</div>
       <div><span>公开信息仍未证明</span>${(research.gaps || []).slice(0, 3).map(item => `<p>· ${escapeHtml(item)}</p>`).join("")}</div>
     </div>
+    <details class="research-evidence">
+      <summary>查看技术证据与客户应用</summary>
+      <p><strong>客户 / 下游应用：</strong>${escapeHtml((research.customerMarkets || []).join("、") || "公开信息不足")}</p>
+      ${(research.technologyEvidence || []).slice(0, 5).map(item => `<p><strong>${escapeHtml(item.technology)}：</strong>${escapeHtml(item.evidence)}</p>`).join("")}
+    </details>
     <div class="research-sources">
       <span>公开来源 · ${research.researchedAt ? new Date(research.researchedAt).toLocaleDateString("zh-CN") : "刚刚"}</span>
       <div>${(research.sources || []).map(source => `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(source.evidenceLevel || "公开网页")}">${escapeHtml(source.title || source.domain)}${source.evidenceLevel === "搜索摘要" ? " · 摘要" : ""}</a>`).join("") || `<em>未找到可引用来源</em>`}</div>
@@ -1406,10 +1435,18 @@ function archiveCompanyResearch(candidate, job) {
     company: research.company || candidate.company,
     role: candidate.role,
     summary: research.summary,
+    industryPosition: research.industryPosition,
+    valueChainRole: research.valueChainRole,
+    businessModel: research.businessModel,
+    customerMarkets: research.customerMarkets || [],
+    operatingStage: research.operatingStage,
     products: research.products || [],
     technologies: research.technologies || [],
+    technologyEvidence: research.technologyEvidence || [],
     fit: research.fit,
     fitReasons: research.fitReasons || [],
+    jdMapping: research.jdMapping || [],
+    hrInsights: research.hrInsights || [],
     gaps: research.gaps || [],
     sources: research.sources || [],
     researchedAt: research.researchedAt
@@ -1422,7 +1459,7 @@ function archiveCompanyResearch(candidate, job) {
 }
 
 async function ensureCompanyResearch(candidate, force = false) {
-  if (!candidate || (!force && candidate.companyResearch)) return;
+  if (!candidate || (!force && (candidate.companyResearch?.status === "loading" || candidate.companyResearch?.skill === "industry-research-v1"))) return;
   const job = currentJob();
   candidate.companyResearch = { status: "loading" };
   renderCandidateDetail(candidate.id);
@@ -1521,7 +1558,9 @@ function renderCandidateDetail(candidateId) {
         </div>
       </div>
     </section>`;
-  if (!c.companyResearch) void ensureCompanyResearch(c);
+  if (!c.companyResearch || (!["loading", "error"].includes(c.companyResearch.status) && c.companyResearch.skill !== "industry-research-v1")) {
+    void ensureCompanyResearch(c);
+  }
 }
 
 function openImportModal(tab = "sample") {
@@ -2140,6 +2179,14 @@ ${companyResearch?.status === "researched" ? `- 与目标 JD 的背景适配：$
 - 研究结论：${companyResearch.summary}
 - 主要产品 / 业务：${(companyResearch.products || []).join("、") || "公开信息不足"}
 - 主要技术方向：${(companyResearch.technologies || []).join("、") || "公开信息不足"}
+- 产业定位：${companyResearch.industryPosition || "公开信息不足"}
+- 产业链位置：${companyResearch.valueChainRole || "公开信息不足"}
+- 业务模式：${companyResearch.businessModel || "公开信息不足"}
+- 客户 / 下游应用：${(companyResearch.customerMarkets || []).join("、") || "公开信息不足"}
+- 业务 / 制造阶段：${companyResearch.operatingStage || "公开信息不足"}
+
+企业背景与 JD 逐项映射：
+${(companyResearch.jdMapping || []).map(item => `- ${item.requirement}｜${item.relevance}｜${item.companyEvidence}｜${item.reason}`).join("\n") || "- 暂无充分公开证据"}
 
 可能相关：
 ${(companyResearch.fitReasons || []).map(item => `- ${item}`).join("\n") || "- 暂无充分公开证据"}
