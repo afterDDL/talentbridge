@@ -422,6 +422,7 @@ async function handleApi(req, res, pathname) {
               status: "success",
               mode: analysis.mode,
               model: analysis.model || null,
+              resume: text,
               result: analysis.result
             });
           } catch (error) {

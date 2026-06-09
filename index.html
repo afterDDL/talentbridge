@@ -129,6 +129,30 @@
       </section>
     </div>
 
+    <div class="resume-modal-backdrop hidden" id="resumeModalBackdrop">
+      <section class="resume-modal" role="dialog" aria-modal="true" aria-labelledby="resumeModalTitle">
+        <header>
+          <div>
+            <p class="eyebrow">候选人原始材料</p>
+            <h2 id="resumeModalTitle">原始简历</h2>
+            <p id="resumeModalMeta"></p>
+          </div>
+          <button class="icon-btn" data-action="close-resume" aria-label="关闭原始简历">×</button>
+        </header>
+        <div class="resume-reader">
+          <div class="resume-reader-note">
+            <span>原文</span>
+            <p>以下内容来自候选人导入材料，未经 AI 改写。请结合右侧分析结论进行人工复核。</p>
+          </div>
+          <pre id="resumeOriginalText"></pre>
+        </div>
+        <footer>
+          <button class="btn secondary" data-action="copy-resume">复制全文</button>
+          <button class="btn primary" data-action="close-resume">完成查看</button>
+        </footer>
+      </section>
+    </div>
+
     <script src="./app.js"></script>
   </body>
 </html>

@@ -232,6 +232,7 @@ const state = {
   uploadFiles: [],
   decisions: {},
   evaluations: {},
+  deletedCandidates: {},
   selectedKnowledgePack: "advanced-packaging"
 };
 
@@ -250,6 +251,7 @@ function loadSavedState() {
     if (saved.imported) state.imported = { ...state.imported, ...saved.imported };
     if (saved.decisions) state.decisions = saved.decisions;
     if (saved.evaluations) state.evaluations = saved.evaluations;
+    if (saved.deletedCandidates) state.deletedCandidates = saved.deletedCandidates;
     if (saved.knowledgePacks) {
       Object.entries(saved.knowledgePacks).forEach(([packId, pack]) => {
         knowledgePacks[packId] = pack;
@@ -265,6 +267,11 @@ function loadSavedState() {
         }
       });
     }
+    Object.entries(state.deletedCandidates).forEach(([jobId, candidateIds]) => {
+      if (jobs[jobId] && Array.isArray(candidateIds)) {
+        jobs[jobId].candidates = jobs[jobId].candidates.filter(candidate => !candidateIds.includes(candidate.id));
+      }
+    });
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
@@ -287,6 +294,7 @@ function saveState() {
     imported: state.imported,
     decisions: state.decisions,
     evaluations: state.evaluations,
+    deletedCandidates: state.deletedCandidates,
     knowledgePacks,
     selectedKnowledgePack: state.selectedKnowledgePack,
     customCandidates,
@@ -299,6 +307,10 @@ const modal = document.getElementById("modalBackdrop");
 const importContent = document.getElementById("importContent");
 const importConfirm = document.getElementById("importConfirm");
 const onboarding = document.getElementById("onboardingBackdrop");
+const resumeModal = document.getElementById("resumeModalBackdrop");
+const resumeModalTitle = document.getElementById("resumeModalTitle");
+const resumeModalMeta = document.getElementById("resumeModalMeta");
+const resumeOriginalText = document.getElementById("resumeOriginalText");
 const ONBOARDING_KEY = "talentbridge-onboarding-seen";
 
 async function apiRequest(path, payload) {
@@ -1154,7 +1166,7 @@ function renderCandidateDetail(candidateId) {
         <div class="breadcrumbs"><button class="btn ghost small" data-action="back-queue">← 返回复核队列</button><span>/</span><b>${c.name}</b></div>
         <div class="title-row">
           <div class="title-copy"><div><h1>能力迁移分析</h1><p>${job.title} · 分析生成于刚刚</p></div></div>
-          <div class="title-actions"><button class="btn secondary" data-action="export-candidate">导出分析报告</button><button class="btn primary" data-action="next-candidate">下一位候选人 →</button></div>
+          <div class="title-actions"><button class="btn danger" data-action="delete-candidate">删除候选人</button><button class="btn secondary resume-entry" data-action="view-resume">查看原始简历</button><button class="btn secondary" data-action="export-candidate">导出分析报告</button><button class="btn primary" data-action="next-candidate">下一位候选人 →</button></div>
         </div>
       </div>
       <div class="page-body">
@@ -1310,6 +1322,68 @@ function closeModal() {
   modal.classList.add("hidden");
 }
 
+function buildSampleResume(candidate) {
+  return [
+    `${candidate.name}`,
+    `${candidate.role}｜${candidate.company}`,
+    "",
+    "个人概况",
+    `具备与${candidate.core}相关的工作经验，关注复杂业务问题的定位、验证与闭环。`,
+    "",
+    "工作经历",
+    `${candidate.company}｜${candidate.role}`,
+    ...candidate.facts.map(item => `• ${item}`),
+    `• ${candidate.quote}`,
+    "",
+    "项目与能力",
+    ...candidate.transferable.map(item => `• ${item}`),
+    "",
+    "补充说明",
+    "本简历为 TalentBridge 演示候选人材料，用于展示从简历事实到能力迁移判断的复核流程。"
+  ].join("\n");
+}
+
+function originalResumeFor(candidate) {
+  return candidate.rawResume?.trim() || buildSampleResume(candidate);
+}
+
+function openOriginalResume() {
+  const candidate = currentJob().candidates.find(item => item.id === state.selectedCandidate);
+  if (!candidate) return;
+  resumeModalTitle.textContent = `${candidate.name}的原始简历`;
+  resumeModalMeta.textContent = `${candidate.role} · ${candidate.company}${candidate.sourceFile ? ` · 来源文件：${candidate.sourceFile}` : " · 示例候选人材料"}`;
+  resumeOriginalText.textContent = originalResumeFor(candidate);
+  resumeModal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+function closeOriginalResume() {
+  resumeModal.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+}
+
+function deleteSelectedCandidate() {
+  const job = currentJob();
+  const candidate = job.candidates.find(item => item.id === state.selectedCandidate);
+  if (!candidate) return;
+  const confirmed = window.confirm(`确认删除候选人“${candidate.name}”吗？\n\n删除后，该候选人的分析结果和人工标注也会一并移除。`);
+  if (!confirmed) return;
+
+  job.candidates = job.candidates.filter(item => item.id !== candidate.id);
+  const recordKey = `${job.id}:${candidate.id}`;
+  delete state.decisions[recordKey];
+  delete state.evaluations[recordKey];
+  if (!candidate.custom) {
+    const deleted = new Set(state.deletedCandidates[job.id] || []);
+    deleted.add(candidate.id);
+    state.deletedCandidates[job.id] = [...deleted];
+  }
+  state.selectedCandidate = null;
+  saveState();
+  renderQueue();
+  toast("候选人已删除", `${candidate.name}已从当前岗位复核队列移除`);
+}
+
 async function completeImport() {
   const job = currentJob();
   const originalLabel = importConfirm.textContent;
@@ -1344,7 +1418,8 @@ async function completeImport() {
           ...item.result,
           id: `upload-${Date.now()}-${index}`,
           custom: true,
-          sourceFile: item.name
+          sourceFile: item.name,
+          rawResume: item.resume
         });
       });
       state.imported[job.id] = data.summary.success > 0 || state.imported[job.id];
@@ -1390,7 +1465,9 @@ async function completeImport() {
       job.candidates.unshift({
         ...data.result,
         id: `custom-${Date.now()}`,
-        custom: true
+        custom: true,
+        sourceFile: "粘贴文本",
+        rawResume: text
       });
       toast(
         data.mode !== "demo" ? "真实 AI 分析完成" : "演示分析完成",
@@ -1442,6 +1519,8 @@ function buildCandidateFromText(text, job) {
   return {
     id: `custom-${Date.now()}`,
     custom: true,
+    sourceFile: "粘贴文本",
+    rawResume: text,
     name,
     role: firstLine.slice(0, 28),
     company: "手动导入",
@@ -1750,6 +1829,16 @@ function handleClick(event) {
   }
   if (action === "open-import") openImportModal();
   if (action === "close-modal") closeModal();
+  if (action === "view-resume") openOriginalResume();
+  if (action === "close-resume") closeOriginalResume();
+  if (action === "delete-candidate") deleteSelectedCandidate();
+  if (action === "copy-resume") {
+    const candidate = currentJob().candidates.find(item => item.id === state.selectedCandidate);
+    if (candidate) {
+      navigator.clipboard?.writeText(originalResumeFor(candidate));
+      toast("原始简历已复制", "可粘贴到面试记录或协作工具");
+    }
+  }
   if (action === "start-analysis") { toast("AI 分析完成", "已生成复核队列和迁移证据"); renderQueue(); }
   if (action === "back-queue") renderQueue();
   if (action === "show-compare") showCompare();
@@ -1938,6 +2027,12 @@ document.addEventListener("drop", event => {
 importConfirm.addEventListener("click", completeImport);
 modal.addEventListener("click", event => {
   if (event.target === modal) closeModal();
+});
+resumeModal.addEventListener("click", event => {
+  if (event.target === resumeModal) closeOriginalResume();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !resumeModal.classList.contains("hidden")) closeOriginalResume();
 });
 document.addEventListener("keydown", event => {
   if (event.key === "Escape") closeModal();
