@@ -921,7 +921,12 @@ function importedList(job) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><strong>AI 解析完成</strong><span class="tag green">100%</span></div>
       <div class="progress"><i style="width:100%"></i></div>
       <div class="sample-preview">
-        ${job.candidates.slice(0, 8).map(c => `<div class="sample-person"><span class="person-avatar">${c.name.slice(-1)}</span><div><strong>${c.name}</strong><span>${c.role}</span></div></div>`).join("")}
+        ${job.candidates.map(c => `
+          <div class="sample-person import-candidate">
+            <span class="person-avatar">${c.name.slice(-1)}</span>
+            <div><strong>${c.name}</strong><span>${c.role}</span></div>
+            <button class="candidate-remove" data-action="delete-imported-candidate" data-candidate-id="${c.id}" title="移除候选人" aria-label="移除候选人 ${c.name}">×</button>
+          </div>`).join("")}
       </div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
         <button class="btn secondary" data-action="open-import">继续添加</button>
@@ -1362,9 +1367,9 @@ function closeOriginalResume() {
   document.body.classList.remove("modal-open");
 }
 
-function deleteSelectedCandidate() {
+function deleteCandidate(candidateId, returnToImport = false) {
   const job = currentJob();
-  const candidate = job.candidates.find(item => item.id === state.selectedCandidate);
+  const candidate = job.candidates.find(item => item.id === candidateId);
   if (!candidate) return;
   const confirmed = window.confirm(`确认删除候选人“${candidate.name}”吗？\n\n删除后，该候选人的分析结果和人工标注也会一并移除。`);
   if (!confirmed) return;
@@ -1378,10 +1383,16 @@ function deleteSelectedCandidate() {
     deleted.add(candidate.id);
     state.deletedCandidates[job.id] = [...deleted];
   }
-  state.selectedCandidate = null;
+  if (state.selectedCandidate === candidate.id) state.selectedCandidate = null;
+  if (!job.candidates.length) state.imported[job.id] = false;
   saveState();
-  renderQueue();
+  if (returnToImport || !job.candidates.length) renderImportStep();
+  else renderQueue();
   toast("候选人已删除", `${candidate.name}已从当前岗位复核队列移除`);
+}
+
+function deleteSelectedCandidate() {
+  deleteCandidate(state.selectedCandidate);
 }
 
 async function completeImport() {
@@ -1832,6 +1843,7 @@ function handleClick(event) {
   if (action === "view-resume") openOriginalResume();
   if (action === "close-resume") closeOriginalResume();
   if (action === "delete-candidate") deleteSelectedCandidate();
+  if (action === "delete-imported-candidate") deleteCandidate(actionEl.dataset.candidateId, true);
   if (action === "copy-resume") {
     const candidate = currentJob().candidates.find(item => item.id === state.selectedCandidate);
     if (candidate) {

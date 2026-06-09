@@ -262,6 +262,11 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .sample-person strong, .sample-person span { display: block; }
 .sample-person strong { font-size: 12px; }
 .sample-person span { margin-top: 3px; color: var(--text-3); font-size: 11px; }
+.import-candidate > div { min-width: 0; flex: 1; }
+.import-candidate strong, .import-candidate div > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.candidate-remove { flex: 0 0 auto; width: 26px; height: 26px; border: 0; border-radius: 5px; background: transparent; color: #a0a5ad; cursor: pointer; font-size: 18px; line-height: 1; opacity: .55; transition: .15s ease; }
+.import-candidate:hover .candidate-remove, .candidate-remove:focus-visible { opacity: 1; }
+.candidate-remove:hover { background: var(--red-soft); color: var(--red); }
 .upload-file-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .upload-file { display: grid; grid-template-columns: 42px minmax(0, 1fr) 30px; align-items: center; gap: 10px; padding: 10px 11px; border: 1px solid var(--line-soft); border-radius: 6px; background: white; }
 .upload-file .file-type { width: 38px; padding: 5px 0; border-radius: 4px; background: var(--blue-soft); color: var(--blue); font-size: 9px; font-weight: 700; text-align: center; }
