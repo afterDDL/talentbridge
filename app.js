@@ -1471,7 +1471,7 @@ function renderCandidateDetail(candidateId) {
                 <div class="candidate-hero">
                   <div class="candidate-profile">
                     <span class="person-avatar">${c.name.slice(-1)}</span>
-                    <div><h2>${c.name} ${c.recovered ? `<span class="tag cyan">AI 新找回</span>` : ""} ${c.privacyProtected ? `<span class="tag purple">隐私模式</span>` : ""}</h2><p>${c.role} · ${c.company}</p></div>
+                    <div><h2>${c.name} ${c.recovered ? `<span class="tag cyan">AI 新找回</span>` : ""}</h2><p>${c.role} · ${c.company}</p></div>
                   </div>
                   <div class="decision-verdict"><span class="tag ${verdictClass}">${c.verdict}</span><small>迁移置信度 ${confidence}</small></div>
                 </div>
