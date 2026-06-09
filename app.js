@@ -1436,7 +1436,7 @@ function renderImportTab() {
       <div class="privacy-mode ${state.privacyMode ? "active" : ""}">
         <div class="privacy-mode-copy">
           <span class="privacy-shield">隐私</span>
-          <div><strong>隐私模式${state.privacyMode ? "已开启" : "已关闭"}</strong><p>${state.privacyMode ? "浏览器本地解析并脱敏，服务器只接收脱敏后的文本。" : "原始文件将上传至服务器解析，并发送简历文本给 AI。"}</p></div>
+          <div><strong>隐私模式${state.privacyMode ? "已开启" : "已关闭"}</strong><p>${state.privacyMode ? "本地解析并脱敏个人身份信息；任职企业、岗位和技术经历会保留。" : "原始文件将上传至服务器解析，并发送简历文本给 AI。"}</p></div>
         </div>
         <button class="privacy-switch ${state.privacyMode ? "on" : ""}" data-action="toggle-privacy" role="switch" aria-checked="${state.privacyMode}"><i></i></button>
       </div>
@@ -1457,12 +1457,12 @@ function renderImportTab() {
       <div class="privacy-mode ${state.privacyMode ? "active" : ""}">
         <div class="privacy-mode-copy">
           <span class="privacy-shield">隐私</span>
-          <div><strong>隐私模式${state.privacyMode ? "已开启" : "已关闭"}</strong><p>${state.privacyMode ? "粘贴内容会先在浏览器内自动脱敏，再发送给 AI。" : "粘贴内容将直接发送给 AI。"}</p></div>
+          <div><strong>隐私模式${state.privacyMode ? "已开启" : "已关闭"}</strong><p>${state.privacyMode ? "个人身份信息会脱敏；任职企业、岗位和技术经历会保留。" : "粘贴内容将直接发送给 AI。"}</p></div>
         </div>
         <button class="privacy-switch ${state.privacyMode ? "on" : ""}" data-action="toggle-privacy" role="switch" aria-checked="${state.privacyMode}"><i></i></button>
       </div>
       <textarea class="paste-area" id="pasteResume" placeholder="粘贴候选人的工作经历、项目经历或完整简历文本……"></textarea>
-      <p class="tiny">隐私模式会处理姓名、手机、邮箱、身份证号和详细地址；请仍避免上传不必要的敏感信息。</p>`;
+      <p class="tiny">脱敏姓名、手机、邮箱、证件号和详细地址；保留企业、岗位、部门、项目及产品技术名称。</p>`;
     importConfirm.textContent = "解析这份简历";
     importConfirm.disabled = false;
   }
@@ -1558,6 +1558,14 @@ function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function isEnterpriseNameOccurrence(text, offset, identity) {
+  const before = text.slice(Math.max(0, offset - 16), offset);
+  const after = text.slice(offset + identity.length, offset + identity.length + 24);
+  const organizationSuffix = /^(?:科技|技术|电子|半导体|微电子|软件|网络|信息|智能|制造|实业|工业|材料|装备|咨询|集团|公司|企业|研究院|实验室|银行|证券|基金|医院|大学|学院|中心|事务所)/;
+  const organizationContext = /(?:公司|企业|雇主|任职单位|工作单位|单位)\s*[:：]?\s*$/;
+  return organizationSuffix.test(after) || organizationContext.test(before);
+}
+
 function redactResume(text, identity = "") {
   let redacted = String(text || "");
   const replacements = [
@@ -1578,14 +1586,15 @@ function redactResume(text, identity = "") {
     let count = 0;
     redacted = redacted.replace(pattern, (...args) => {
       count += 1;
-      return typeof replacement === "function" ? replacement(...args) : replacement.replace(/\$(\d)/g, (_, index) => args[Number(index) - 1] || "");
+      return typeof replacement === "function" ? replacement(...args) : replacement.replace(/\$(\d)/g, (_, index) => args[Number(index)] || "");
     });
     if (count) counts[label] = count;
   });
   if (identity && identity.length >= 2) {
     const identityPattern = new RegExp(escapeRegExp(identity), /[A-Za-z]/.test(identity) ? "gi" : "g");
     let identityCount = 0;
-    redacted = redacted.replace(identityPattern, () => {
+    redacted = redacted.replace(identityPattern, (match, offset, source) => {
+      if (isEnterpriseNameOccurrence(source, offset, match)) return match;
       identityCount += 1;
       return "[姓名已脱敏]";
     });
