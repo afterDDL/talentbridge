@@ -18,6 +18,7 @@ RUN /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 COPY package.json ./
 COPY index.html styles.css app.js server.js parse_resume.py ./
+COPY vendor ./vendor
 
 EXPOSE 4174
 

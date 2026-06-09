@@ -230,6 +230,7 @@ const state = {
   selectedCandidate: null,
   importTab: "sample",
   uploadFiles: [],
+  privacyMode: true,
   decisions: {},
   evaluations: {},
   deletedCandidates: {},
@@ -251,6 +252,7 @@ function loadSavedState() {
     if (saved.imported) state.imported = { ...state.imported, ...saved.imported };
     if (saved.decisions) state.decisions = saved.decisions;
     if (saved.evaluations) state.evaluations = saved.evaluations;
+    if (typeof saved.privacyMode === "boolean") state.privacyMode = saved.privacyMode;
     if (saved.deletedCandidates) state.deletedCandidates = saved.deletedCandidates;
     if (saved.knowledgePacks) {
       Object.entries(saved.knowledgePacks).forEach(([packId, pack]) => {
@@ -280,12 +282,16 @@ function loadSavedState() {
 function saveState() {
   const customCandidates = {};
   const customJobs = {};
+  const forStorage = candidate => {
+    const { rawResume, ...savedCandidate } = candidate;
+    return savedCandidate;
+  };
   Object.values(jobs).forEach(job => {
-    customCandidates[job.id] = job.candidates.filter(candidate => candidate.custom);
+    customCandidates[job.id] = job.candidates.filter(candidate => candidate.custom).map(forStorage);
     if (job.custom) {
       customJobs[job.id] = {
         ...job,
-        candidates: job.candidates.filter(candidate => !candidate.custom)
+        candidates: job.candidates.filter(candidate => !candidate.custom).map(forStorage)
       };
     }
   });
@@ -294,6 +300,7 @@ function saveState() {
     imported: state.imported,
     decisions: state.decisions,
     evaluations: state.evaluations,
+    privacyMode: state.privacyMode,
     deletedCandidates: state.deletedCandidates,
     knowledgePacks,
     selectedKnowledgePack: state.selectedKnowledgePack,
@@ -312,6 +319,90 @@ const resumeModalTitle = document.getElementById("resumeModalTitle");
 const resumeModalMeta = document.getElementById("resumeModalMeta");
 const resumeOriginalText = document.getElementById("resumeOriginalText");
 const ONBOARDING_KEY = "talentbridge-onboarding-seen";
+const RESUME_DB = "talentbridge-private-resumes";
+const RESUME_STORE = "resumes";
+
+function openResumeDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(RESUME_DB, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(RESUME_STORE)) {
+        request.result.createObjectStore(RESUME_STORE);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("无法打开本地简历存储"));
+  });
+}
+
+async function storePrivateResume(candidateId, text) {
+  const db = await openResumeDb();
+  await new Promise((resolve, reject) => {
+    const transaction = db.transaction(RESUME_STORE, "readwrite");
+    transaction.objectStore(RESUME_STORE).put(text, candidateId);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  db.close();
+}
+
+async function readPrivateResume(candidateId) {
+  const db = await openResumeDb();
+  const text = await new Promise((resolve, reject) => {
+    const request = db.transaction(RESUME_STORE, "readonly").objectStore(RESUME_STORE).get(candidateId);
+    request.onsuccess = () => resolve(request.result || "");
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return text;
+}
+
+async function deletePrivateResume(candidateId) {
+  try {
+    const db = await openResumeDb();
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction(RESUME_STORE, "readwrite");
+      transaction.objectStore(RESUME_STORE).delete(candidateId);
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+    });
+    db.close();
+  } catch {
+    // Candidate deletion should still complete if local browser storage is unavailable.
+  }
+}
+
+async function clearPrivateResumes() {
+  try {
+    const db = await openResumeDb();
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction(RESUME_STORE, "readwrite");
+      transaction.objectStore(RESUME_STORE).clear();
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+    });
+    db.close();
+  } catch {
+    // The demo can still reset when browser storage is unavailable.
+  }
+}
+
+async function migrateLegacyResumeStorage() {
+  let migrated = false;
+  for (const job of Object.values(jobs)) {
+    for (const candidate of job.candidates) {
+      if (!candidate.custom || !candidate.rawResume?.trim()) continue;
+      try {
+        await storePrivateResume(candidate.id, candidate.rawResume);
+        delete candidate.rawResume;
+        migrated = true;
+      } catch {
+        // Keep legacy data in memory when IndexedDB is unavailable.
+      }
+    }
+  }
+  if (migrated) saveState();
+}
 
 async function apiRequest(path, payload) {
   const response = await fetch(path, {
@@ -526,7 +617,8 @@ function guideStep(time, title, detail, tag) {
   return `<div class="guide-step"><time>${time}</time><span></span><div><strong>${title}</strong><p>${detail}</p></div><em>${tag}</em></div>`;
 }
 
-function resetDemo() {
+async function resetDemo() {
+  await clearPrivateResumes();
   localStorage.removeItem(STORAGE_KEY);
   localStorage.setItem(ONBOARDING_KEY, "true");
   window.location.reload();
@@ -924,7 +1016,7 @@ function importedList(job) {
         ${job.candidates.map(c => `
           <div class="sample-person import-candidate">
             <span class="person-avatar">${c.name.slice(-1)}</span>
-            <div><strong>${c.name}</strong><span>${c.role}</span></div>
+            <div><strong>${c.name}${c.privacyProtected ? ` <em class="local-only">本机原文</em>` : ""}</strong><span>${c.role}</span></div>
             <button class="candidate-remove" data-action="delete-imported-candidate" data-candidate-id="${c.id}" title="移除候选人" aria-label="移除候选人 ${c.name}">×</button>
           </div>`).join("")}
       </div>
@@ -1182,7 +1274,7 @@ function renderCandidateDetail(candidateId) {
                 <div class="candidate-hero">
                   <div class="candidate-profile">
                     <span class="person-avatar">${c.name.slice(-1)}</span>
-                    <div><h2>${c.name} ${c.recovered ? `<span class="tag cyan">AI 新找回</span>` : ""}</h2><p>${c.role} · ${c.company}</p></div>
+                    <div><h2>${c.name} ${c.recovered ? `<span class="tag cyan">AI 新找回</span>` : ""} ${c.privacyProtected ? `<span class="tag purple">隐私模式</span>` : ""}</h2><p>${c.role} · ${c.company}${c.privacyProtected ? ` · ${c.privacySummary || "原文仅存当前浏览器"}` : ""}</p></div>
                   </div>
                   <span class="tag ${verdictClass}">${c.verdict}</span>
                 </div>
@@ -1262,12 +1354,19 @@ function renderImportTab() {
     importConfirm.disabled = false;
   } else if (state.importTab === "upload") {
     importContent.innerHTML = `
+      <div class="privacy-mode ${state.privacyMode ? "active" : ""}">
+        <div class="privacy-mode-copy">
+          <span class="privacy-shield">隐私</span>
+          <div><strong>隐私模式${state.privacyMode ? "已开启" : "已关闭"}</strong><p>${state.privacyMode ? "浏览器本地解析并脱敏，服务器只接收脱敏后的文本。" : "原始文件将上传至服务器解析，并发送简历文本给 AI。"}</p></div>
+        </div>
+        <button class="privacy-switch ${state.privacyMode ? "on" : ""}" data-action="toggle-privacy" role="switch" aria-checked="${state.privacyMode}"><i></i></button>
+      </div>
       <input type="file" id="resumeFileInput" accept=".pdf,.docx,.txt,.md" multiple hidden>
       <div class="import-drop upload-zone" id="uploadZone">
         <div>
           <div class="upload-icon">⇧</div>
           <h3>拖拽简历到这里</h3>
-          <p>支持 PDF、DOCX、TXT，单份不超过 8MB，最多 10 份</p>
+          <p>支持 PDF、DOCX、TXT、Markdown，单份不超过 8MB，最多 10 份</p>
           <button class="btn secondary" data-action="choose-files">选择本地文件</button>
         </div>
       </div>
@@ -1275,7 +1374,16 @@ function renderImportTab() {
     importConfirm.textContent = state.uploadFiles.length ? `分析 ${state.uploadFiles.length} 份简历` : "开始解析";
     importConfirm.disabled = !state.uploadFiles.length;
   } else {
-    importContent.innerHTML = `<textarea class="paste-area" id="pasteResume" placeholder="粘贴候选人的工作经历、项目经历或完整简历文本……"></textarea><p class="tiny">系统只提取与当前岗位有关的经历，不使用敏感个人属性。</p>`;
+    importContent.innerHTML = `
+      <div class="privacy-mode ${state.privacyMode ? "active" : ""}">
+        <div class="privacy-mode-copy">
+          <span class="privacy-shield">隐私</span>
+          <div><strong>隐私模式${state.privacyMode ? "已开启" : "已关闭"}</strong><p>${state.privacyMode ? "粘贴内容会先在浏览器内自动脱敏，再发送给 AI。" : "粘贴内容将直接发送给 AI。"}</p></div>
+        </div>
+        <button class="privacy-switch ${state.privacyMode ? "on" : ""}" data-action="toggle-privacy" role="switch" aria-checked="${state.privacyMode}"><i></i></button>
+      </div>
+      <textarea class="paste-area" id="pasteResume" placeholder="粘贴候选人的工作经历、项目经历或完整简历文本……"></textarea>
+      <p class="tiny">隐私模式会处理姓名、手机、邮箱、身份证号和详细地址；请仍避免上传不必要的敏感信息。</p>`;
     importConfirm.textContent = "解析这份简历";
     importConfirm.disabled = false;
   }
@@ -1323,6 +1431,113 @@ function fileToBase64(file) {
   });
 }
 
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error(`无法读取 ${file.name}`));
+    reader.readAsText(file, "utf-8");
+  });
+}
+
+async function parsePdfLocally(file) {
+  const pdfjs = await import("./vendor/pdf.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc = "./vendor/pdf.worker.mjs";
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjs.getDocument({ data }).promise;
+  const pages = [];
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    pages.push(content.items.map(item => item.str).join(" "));
+  }
+  return pages.join("\n\n");
+}
+
+async function parseDocxLocally(file) {
+  if (!window.mammoth) throw new Error("DOCX 本地解析组件未加载");
+  const result = await window.mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+  return result.value || "";
+}
+
+async function parseResumeLocally(file) {
+  const extension = file.name.split(".").pop().toLowerCase();
+  if (extension === "pdf") return parsePdfLocally(file);
+  if (extension === "docx") return parseDocxLocally(file);
+  return readFileAsText(file);
+}
+
+function extractLocalIdentity(text, fileName = "") {
+  const labelled = text.match(/(?:姓名|Name)\s*[:：]\s*([\u4e00-\u9fa5]{2,4}|[A-Za-z][A-Za-z .'-]{1,40})/i);
+  const firstLine = text.split(/\r?\n/).map(line => line.trim()).find(Boolean) || "";
+  const firstLineName = firstLine.match(/^([\u4e00-\u9fa5]{2,4})$/)?.[1];
+  const fileNameCandidate = fileName.replace(/\.[^.]+$/, "").replace(/(?:简历|resume|cv|候选人|最新版|最终版)/gi, "").replace(/[_\-\s]+/g, "").trim();
+  return labelled?.[1]?.trim() || firstLineName || (/^[\u4e00-\u9fa5]{2,4}$/.test(fileNameCandidate) ? fileNameCandidate : "");
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function redactResume(text, identity = "") {
+  let redacted = String(text || "");
+  const replacements = [
+    ["邮箱", /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[邮箱已脱敏]"],
+    ["手机号", /(?<!\d)(?:\+?86[-\s]?)?1[3-9]\d{9}(?!\d)/g, "[手机号已脱敏]"],
+    ["电话", /(?<!\d)(?:0\d{2,3}[-\s]?)?\d{7,8}(?!\d)/g, "[电话已脱敏]"],
+    ["身份证号", /(?<!\d)\d{17}[\dXx](?!\d)/g, "[身份证号已脱敏]"],
+    ["微信号", /((?:微信|WeChat|wechat)\s*(?:号|ID)?\s*[:：]\s*)[A-Za-z][-_A-Za-z0-9]{5,19}/gi, "$1[微信号已脱敏]"],
+    ["QQ", /(QQ\s*(?:号|ID)?\s*[:：]?\s*)[1-9]\d{4,11}/gi, "$1[QQ已脱敏]"],
+    ["地址", /((?:现居地|居住地|通讯地址|家庭地址|联系地址|地址)\s*[:：]\s*)[^\n\r]{4,80}/gi, "$1[地址已脱敏]"],
+    ["出生日期", /((?:出生日期|出生年月|生日)\s*[:：]\s*)[^\n\r]{4,20}/gi, "$1[出生日期已脱敏]"],
+    ["年龄", /((?:年龄)\s*[:：]\s*)\d{1,3}\s*岁?/gi, "$1[年龄已脱敏]"],
+    ["性别", /((?:性别)\s*[:：]\s*)[男女]/gi, "$1[性别已脱敏]"],
+    ["姓名", /((?:姓名|Name)\s*[:：]\s*)([\u4e00-\u9fa5]{2,4}|[A-Za-z][A-Za-z .'-]{1,40})/gi, "$1[姓名已脱敏]"]
+  ];
+  const counts = {};
+  replacements.forEach(([label, pattern, replacement]) => {
+    let count = 0;
+    redacted = redacted.replace(pattern, (...args) => {
+      count += 1;
+      return typeof replacement === "function" ? replacement(...args) : replacement.replace(/\$(\d)/g, (_, index) => args[Number(index) - 1] || "");
+    });
+    if (count) counts[label] = count;
+  });
+  if (identity && identity.length >= 2) {
+    const identityPattern = new RegExp(escapeRegExp(identity), /[A-Za-z]/.test(identity) ? "gi" : "g");
+    let identityCount = 0;
+    redacted = redacted.replace(identityPattern, () => {
+      identityCount += 1;
+      return "[姓名已脱敏]";
+    });
+    if (identityCount) counts["姓名"] = (counts["姓名"] || 0) + identityCount;
+  }
+  const lines = redacted.split(/\r?\n/);
+  const firstContentIndex = lines.findIndex(line => line.trim());
+  if (firstContentIndex >= 0 && /^[\u4e00-\u9fa5]{2,4}$/.test(lines[firstContentIndex].trim())) {
+    lines[firstContentIndex] = "[姓名已脱敏]";
+    counts["姓名"] = (counts["姓名"] || 0) + 1;
+    redacted = lines.join("\n");
+  }
+  return { text: redacted, counts };
+}
+
+function privacySummary(counts) {
+  const labels = Object.entries(counts).map(([label, count]) => `${label}${count}处`);
+  return labels.length ? labels.join("、") : "未识别到常见敏感字段";
+}
+
+function analysisJobPayload(job) {
+  return {
+    title: job.title,
+    industry: job.industry,
+    summary: job.summary,
+    model: job.model,
+    adjacent: job.adjacent,
+    knowledgePack: buildKnowledgeContext(job)
+  };
+}
+
 function closeModal() {
   modal.classList.add("hidden");
 }
@@ -1348,18 +1563,28 @@ function buildSampleResume(candidate) {
   ].join("\n");
 }
 
-function originalResumeFor(candidate) {
-  return candidate.rawResume?.trim() || buildSampleResume(candidate);
+async function originalResumeFor(candidate) {
+  if (candidate.rawResume?.trim()) return candidate.rawResume.trim();
+  if (candidate.custom) {
+    const stored = await readPrivateResume(candidate.id);
+    if (stored?.trim()) return stored.trim();
+  }
+  return buildSampleResume(candidate);
 }
 
-function openOriginalResume() {
+async function openOriginalResume() {
   const candidate = currentJob().candidates.find(item => item.id === state.selectedCandidate);
   if (!candidate) return;
   resumeModalTitle.textContent = `${candidate.name}的原始简历`;
-  resumeModalMeta.textContent = `${candidate.role} · ${candidate.company}${candidate.sourceFile ? ` · 来源文件：${candidate.sourceFile}` : " · 示例候选人材料"}`;
-  resumeOriginalText.textContent = originalResumeFor(candidate);
+  resumeModalMeta.textContent = `${candidate.role} · ${candidate.company}${candidate.sourceFile ? ` · 来源文件：${candidate.sourceFile}` : " · 示例候选人材料"}${candidate.privacyProtected ? " · 原文仅存当前浏览器" : ""}`;
+  resumeOriginalText.textContent = "正在从本地浏览器读取原始简历…";
   resumeModal.classList.remove("hidden");
   document.body.classList.add("modal-open");
+  try {
+    resumeOriginalText.textContent = await originalResumeFor(candidate);
+  } catch {
+    resumeOriginalText.textContent = "无法读取本地原始简历。浏览器数据可能已被清理。";
+  }
 }
 
 function closeOriginalResume() {
@@ -1383,6 +1608,7 @@ function deleteCandidate(candidateId, returnToImport = false) {
   }
   if (state.selectedCandidate === candidate.id) state.selectedCandidate = null;
   if (!job.candidates.length) state.imported[job.id] = false;
+  void deletePrivateResume(candidate.id);
   saveState();
   if (returnToImport || !job.candidates.length) renderImportStep();
   else renderQueue();
@@ -1405,41 +1631,81 @@ async function completeImport() {
     importConfirm.textContent = "正在读取文件";
     importConfirm.disabled = true;
     try {
-      const files = await Promise.all(state.uploadFiles.map(async file => ({
-        name: file.name,
-        type: file.type,
-        data: await fileToBase64(file)
-      })));
-      importConfirm.textContent = "AI 正在逐份分析";
-      const data = await apiRequest("/api/upload-resumes", {
-        files,
-        job: {
-          title: job.title,
-          industry: job.industry,
-          summary: job.summary,
-          model: job.model,
-          adjacent: job.adjacent,
-          knowledgePack: buildKnowledgeContext(job)
+      let successCount = 0;
+      const failures = [];
+      const privacyDetails = [];
+      if (state.privacyMode) {
+        for (let index = 0; index < state.uploadFiles.length; index += 1) {
+          const file = state.uploadFiles[index];
+          importConfirm.textContent = `本地解析 ${index + 1}/${state.uploadFiles.length}`;
+          try {
+            const rawResume = (await parseResumeLocally(file)).trim();
+            if (!rawResume) throw new Error("未提取到可分析的文本");
+            const identity = extractLocalIdentity(rawResume, file.name);
+            const redacted = redactResume(rawResume, identity);
+            importConfirm.textContent = `发送脱敏文本 ${index + 1}/${state.uploadFiles.length}`;
+            const data = await apiRequest("/api/analyze-resume", {
+              resume: redacted.text,
+              job: analysisJobPayload(job)
+            });
+            const candidateId = `upload-${Date.now()}-${index}`;
+            const candidate = {
+              ...data.result,
+              name: identity || data.result.name,
+              id: candidateId,
+              custom: true,
+              sourceFile: file.name,
+              privacyProtected: true,
+              privacySummary: privacySummary(redacted.counts)
+            };
+            await storePrivateResume(candidateId, rawResume);
+            job.candidates.unshift(candidate);
+            successCount += 1;
+            privacyDetails.push(candidate.privacySummary);
+          } catch (error) {
+            failures.push({ name: file.name, error: error.message });
+          }
         }
-      });
-      data.results.filter(item => item.status === "success").forEach((item, index) => {
-        job.candidates.unshift({
-          ...item.result,
-          id: `upload-${Date.now()}-${index}`,
-          custom: true,
-          sourceFile: item.name,
-          rawResume: item.resume
+      } else {
+        const files = await Promise.all(state.uploadFiles.map(async file => ({
+          name: file.name,
+          type: file.type,
+          data: await fileToBase64(file)
+        })));
+        importConfirm.textContent = "AI 正在逐份分析";
+        const data = await apiRequest("/api/upload-resumes", {
+          files,
+          job: analysisJobPayload(job)
         });
-      });
-      state.imported[job.id] = data.summary.success > 0 || state.imported[job.id];
+        for (let index = 0; index < data.results.length; index += 1) {
+          const item = data.results[index];
+          if (item.status !== "success") {
+            failures.push(item);
+            continue;
+          }
+          const candidateId = `upload-${Date.now()}-${index}`;
+          job.candidates.unshift({
+            ...item.result,
+            id: candidateId,
+            custom: true,
+            sourceFile: item.name
+          });
+          await storePrivateResume(candidateId, item.resume);
+          successCount += 1;
+        }
+      }
+      state.imported[job.id] = successCount > 0 || state.imported[job.id];
       saveState();
-      const failures = data.results.filter(item => item.status === "error");
       state.uploadFiles = [];
       closeModal();
       renderImportStep();
       toast(
-        `成功分析 ${data.summary.success} 份简历`,
-        failures.length ? `${failures.length} 份失败：${failures[0].name}（${failures[0].error}）` : "候选人已加入当前岗位复核队列"
+        `成功分析 ${successCount} 份简历`,
+        failures.length
+          ? `${failures.length} 份失败：${failures[0].name}（${failures[0].error}）`
+          : state.privacyMode
+            ? `原始文件未上传；已自动处理${privacyDetails[0] || "敏感字段"}`
+            : "候选人已加入当前岗位复核队列"
       );
     } catch (error) {
       toast("批量分析失败", error.message);
@@ -1459,32 +1725,38 @@ async function completeImport() {
     importConfirm.classList.add("loading");
     importConfirm.textContent = "AI 正在分析";
     importConfirm.disabled = true;
+    const identity = extractLocalIdentity(text);
+    const redacted = state.privacyMode ? redactResume(text, identity) : { text, counts: {} };
+    const candidateId = `custom-${Date.now()}`;
     try {
       const data = await apiRequest("/api/analyze-resume", {
-        resume: text,
-        job: {
-          title: job.title,
-          industry: job.industry,
-          summary: job.summary,
-          model: job.model,
-          adjacent: job.adjacent,
-          knowledgePack: buildKnowledgeContext(job)
-        }
+        resume: redacted.text,
+        job: analysisJobPayload(job)
       });
       job.candidates.unshift({
         ...data.result,
-        id: `custom-${Date.now()}`,
+        name: identity || data.result.name,
+        id: candidateId,
         custom: true,
         sourceFile: "粘贴文本",
-        rawResume: text
+        privacyProtected: state.privacyMode,
+        privacySummary: state.privacyMode ? privacySummary(redacted.counts) : ""
       });
+      await storePrivateResume(candidateId, text);
       toast(
         data.mode !== "demo" ? "真实 AI 分析完成" : "演示分析完成",
-        data.mode !== "demo" ? `模型：${data.model}` : "配置 AI 服务密钥后可切换到真实模型"
+        state.privacyMode
+          ? `仅发送脱敏文本；${privacySummary(redacted.counts)}`
+          : data.mode !== "demo" ? `模型：${data.model}` : "配置 AI 服务密钥后可切换到真实模型"
       );
     } catch (error) {
       const candidate = buildCandidateFromText(text, job);
+      candidate.id = candidateId;
+      candidate.privacyProtected = state.privacyMode;
+      candidate.privacySummary = state.privacyMode ? privacySummary(redacted.counts) : "";
+      delete candidate.rawResume;
       job.candidates.unshift(candidate);
+      await storePrivateResume(candidateId, text);
       toast("AI 服务暂不可用", `已使用本地分析完成：${error.message}`);
     } finally {
       importConfirm.classList.remove("loading");
@@ -1845,9 +2117,20 @@ function handleClick(event) {
   if (action === "copy-resume") {
     const candidate = currentJob().candidates.find(item => item.id === state.selectedCandidate);
     if (candidate) {
-      navigator.clipboard?.writeText(originalResumeFor(candidate));
-      toast("原始简历已复制", "可粘贴到面试记录或协作工具");
+      originalResumeFor(candidate).then(text => {
+        navigator.clipboard?.writeText(text);
+        toast("原始简历已复制", "可粘贴到面试记录或协作工具");
+      }).catch(() => toast("复制失败", "无法读取本地原始简历"));
     }
+  }
+  if (action === "toggle-privacy") {
+    const pastedText = document.getElementById("pasteResume")?.value || "";
+    state.privacyMode = !state.privacyMode;
+    saveState();
+    renderImportTab();
+    const textarea = document.getElementById("pasteResume");
+    if (textarea) textarea.value = pastedText;
+    toast(state.privacyMode ? "隐私模式已开启" : "隐私模式已关闭", state.privacyMode ? "原始文件不会上传至服务器" : "原始文件将由服务器解析");
   }
   if (action === "start-analysis") { toast("AI 分析完成", "已生成复核队列和迁移证据"); renderQueue(); }
   if (action === "back-queue") renderQueue();
@@ -2052,6 +2335,7 @@ document.querySelector(".top-search input").addEventListener("keydown", event =>
 });
 
 loadSavedState();
+void migrateLegacyResumeStorage();
 renderWorkbench();
 detectAiMode();
 if (!localStorage.getItem(ONBOARDING_KEY)) {
