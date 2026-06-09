@@ -657,6 +657,33 @@ function insufficientCompanyResearch(company, reason, sources = []) {
   };
 }
 
+function sanitizeCompanyResearchEvidence(result) {
+  const inferredEvidence = /必然涉及|通常具备|一般会|理应具备|必然会/;
+  return {
+    ...result,
+    technologyEvidence: (result.technologyEvidence || []).map(item => ({
+      ...item,
+      evidence: inferredEvidence.test(item.evidence)
+        ? "公开来源未明确证明该项技术活动。"
+        : item.evidence
+    })),
+    jdMapping: (result.jdMapping || []).map(item => {
+      const evidenceInferred = inferredEvidence.test(item.companyEvidence);
+      return {
+        ...item,
+        companyEvidence: evidenceInferred ? "公开来源未明确证明该项岗位活动。" : item.companyEvidence,
+        relevance: evidenceInferred && item.relevance === "直接相关" ? "未证实" : item.relevance,
+        reason: inferredEvidence.test(item.reason)
+          ? "公开来源仅证明相关业务或量产环境，未直接证明该岗位活动。"
+          : item.reason
+      };
+    }),
+    fitReasons: (result.fitReasons || []).map(item => (
+      inferredEvidence.test(item) ? "公开来源未明确证明该项岗位关联。" : item
+    ))
+  };
+}
+
 async function researchCompany(payload) {
   const company = String(payload.company || "").trim();
   const job = payload.job || {};
@@ -692,12 +719,13 @@ async function researchCompany(payload) {
     system: industryResearchSkill.SYSTEM_PROMPT,
     input: `待研究企业：${company}\n候选人岗位：${payload.role || "未说明"}\n目标岗位：${JSON.stringify(job)}\n\n公开网页：\n${sourceInput}`
   });
-  const selectedIds = new Set(result.sourceIds);
+  const sanitizedResult = sanitizeCompanyResearchEvidence(result);
+  const selectedIds = new Set(sanitizedResult.sourceIds);
   const selectedSources = sources
     .filter(source => selectedIds.has(source.id))
     .map(({ id, title, url, domain, evidenceLevel }) => ({ id, title, url, domain, evidenceLevel }));
   const finalResult = {
-    ...result,
+    ...sanitizedResult,
     company,
     skill: industryResearchSkill.VERSION,
     sources: selectedSources.length ? selectedSources : sources.slice(0, 3).map(({ id, title, url, domain, evidenceLevel }) => ({ id, title, url, domain, evidenceLevel })),
