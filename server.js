@@ -568,6 +568,28 @@ function wikidataLinkedEntityIds(entity) {
   )).slice(0, 20);
 }
 
+async function wikidataReverseLinkedEntityIds(entityId) {
+  const query = [
+    "SELECT DISTINCT ?item ?relationship WHERE {",
+    `  { ?item wdt:P749 wd:${entityId} . BIND("子公司" AS ?relationship) }`,
+    `  UNION { ?item wdt:P127 wd:${entityId} . BIND("控股/所有关系" AS ?relationship) }`,
+    `  UNION { ?item wdt:P361 wd:${entityId} . BIND("组成部分" AS ?relationship) }`,
+    "} LIMIT 50"
+  ].join("\n");
+  try {
+    const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(query)}&format=json`;
+    const response = await fetchWithLimit(url, "application/sparql-results+json,application/json");
+    const data = JSON.parse(response.text);
+    return (data.results?.bindings || []).map(binding => ({
+      id: binding.item?.value?.split("/").pop(),
+      relationship: binding.relationship?.value || "关联主体"
+    })).filter(item => item.id);
+  } catch (error) {
+    console.warn("Wikidata reverse relationship lookup failed:", error.message);
+    return [];
+  }
+}
+
 async function entitySourceBundle(entity, entityId, relationship, job) {
   const label = entity.labels?.zh?.value || entity.labels?.en?.value || entityId;
   const description = entity.descriptions?.zh?.value || entity.descriptions?.en?.value || "";
@@ -701,7 +723,15 @@ async function discoverStructuredCompanySources(company, job) {
       });
     }
 
-    const linkedEntities = await Promise.all(wikidataLinkedEntityIds(entity).map(async linked => {
+    const linkedIds = [
+      ...wikidataLinkedEntityIds(entity),
+      ...(await wikidataReverseLinkedEntityIds(entityHit.id))
+    ];
+    const uniqueLinkedIds = new Map();
+    linkedIds.forEach(linked => {
+      if (!uniqueLinkedIds.has(linked.id)) uniqueLinkedIds.set(linked.id, linked);
+    });
+    const linkedEntities = await Promise.all([...uniqueLinkedIds.values()].slice(0, 50).map(async linked => {
       try {
         const linkedEntity = await fetchWikidataEntity(linked.id);
         return linkedEntity ? entitySourceBundle(linkedEntity, linked.id, linked.relationship, job) : null;
