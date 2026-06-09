@@ -865,6 +865,10 @@ function buildKnowledgeContext(job) {
       customerMarkets: profile.customerMarkets,
       operatingStage: profile.operatingStage,
       industryBenchmarks: profile.industryBenchmarks,
+      researchMap: profile.researchMap,
+      criticalChokepoints: profile.criticalChokepoints,
+      verificationGates: profile.verificationGates,
+      narrativeChecks: profile.narrativeChecks,
       sourceAssessment: profile.sourceAssessment,
       fit: profile.fit,
       researchedAt: profile.researchedAt
@@ -1405,12 +1409,25 @@ function companyResearchCard(candidate) {
         <div><strong>${escapeHtml(item.topic)}</strong><p>${escapeHtml(item.benchmark)}</p><small>${escapeHtml(item.companyComparison)}</small></div>
       `).join("") || `<p>暂未找到可用的行业参照资料。</p>`}
     </div>
+    <div class="serenity-chokepoints">
+      <span>关键业务卡点</span>
+      ${(research.criticalChokepoints || []).slice(0, 3).map(item => `
+        <div>
+          <span class="tag ${item.verificationStatus === "已验证" ? "green" : item.verificationStatus === "部分验证" ? "amber" : "gray"}">${escapeHtml(item.verificationStatus)}</span>
+          <p><strong>${escapeHtml(item.node)}</strong>${escapeHtml(item.whyCritical)}</p>
+          <small>${escapeHtml(item.companyExposure)}</small>
+        </div>`).join("") || `<p>关键卡点尚未验证。</p>`}
+    </div>
     <div class="research-fit-grid">
       <div><span>HR 应理解的业务背景</span>${(research.hrInsights || research.fitReasons || []).slice(0, 3).map(item => `<p>+ ${escapeHtml(item)}</p>`).join("")}</div>
       <div><span>公开信息仍未证明</span>${(research.gaps || []).slice(0, 3).map(item => `<p>· ${escapeHtml(item)}</p>`).join("")}</div>
     </div>
     <details class="research-evidence">
-      <summary>查看技术证据与客户应用</summary>
+      <summary>查看研究地图、验证门与技术证据</summary>
+      <p><strong>需求驱动：</strong>${escapeHtml(research.researchMap?.demandDriver || "待研究")}</p>
+      <p><strong>价值链路径：</strong>${escapeHtml((research.researchMap?.valueChainPath || []).join(" → ") || "待研究")}</p>
+      ${(research.verificationGates || []).map(item => `<p><strong>${escapeHtml(item.judgment)}｜${escapeHtml(item.question)}</strong>${escapeHtml(item.evidence)}</p>`).join("")}
+      ${(research.narrativeChecks || []).map(item => `<p><strong>叙事核验｜${escapeHtml(item.claim)}</strong>${escapeHtml(item.correction)}</p>`).join("")}
       <p><strong>客户 / 下游应用：</strong>${escapeHtml((research.customerMarkets || []).join("、") || "公开信息不足")}</p>
       ${(research.technologyEvidence || []).slice(0, 5).map(item => `<p><strong>${escapeHtml(item.technology)}：</strong>${escapeHtml(item.evidence)}</p>`).join("")}
     </details>
@@ -1461,6 +1478,10 @@ function archiveCompanyResearch(candidate, job) {
     technologies: research.technologies || [],
     technologyEvidence: research.technologyEvidence || [],
     industryBenchmarks: research.industryBenchmarks || [],
+    researchMap: research.researchMap || {},
+    criticalChokepoints: research.criticalChokepoints || [],
+    verificationGates: research.verificationGates || [],
+    narrativeChecks: research.narrativeChecks || [],
     sourceAssessment: research.sourceAssessment || {},
     fit: research.fit,
     fitReasons: research.fitReasons || [],
@@ -1478,7 +1499,7 @@ function archiveCompanyResearch(candidate, job) {
 }
 
 async function ensureCompanyResearch(candidate, force = false) {
-  if (!candidate || (!force && (candidate.companyResearch?.status === "loading" || candidate.companyResearch?.skill === "industry-research-v4"))) return;
+  if (!candidate || (!force && (candidate.companyResearch?.status === "loading" || candidate.companyResearch?.skill === "industry-research-v5"))) return;
   const job = currentJob();
   candidate.companyResearch = { status: "loading" };
   renderCandidateDetail(candidate.id);
@@ -1577,7 +1598,7 @@ function renderCandidateDetail(candidateId) {
         </div>
       </div>
     </section>`;
-  if (!c.companyResearch || (!["loading", "error"].includes(c.companyResearch.status) && c.companyResearch.skill !== "industry-research-v4")) {
+  if (!c.companyResearch || (!["loading", "error"].includes(c.companyResearch.status) && c.companyResearch.skill !== "industry-research-v5")) {
     void ensureCompanyResearch(c);
   }
 }
@@ -2211,6 +2232,11 @@ ${(companyResearch.jdMapping || []).map(item => `- ${item.requirement}｜${item.
 
 行业参照与公司位置：
 ${(companyResearch.industryBenchmarks || []).map(item => `- ${item.topic}｜行业基准：${item.benchmark}｜公司位置：${item.companyComparison}`).join("\n") || "- 暂无行业参照"}
+
+研究地图与关键卡点：
+- 需求驱动：${companyResearch.researchMap?.demandDriver || "待研究"}
+- 价值链路径：${(companyResearch.researchMap?.valueChainPath || []).join(" → ") || "待研究"}
+${(companyResearch.criticalChokepoints || []).map(item => `- ${item.node}｜${item.verificationStatus}｜${item.companyExposure}`).join("\n") || "- 暂无已验证卡点"}
 
 可能相关：
 ${(companyResearch.fitReasons || []).map(item => `- ${item}`).join("\n") || "- 暂无充分公开证据"}

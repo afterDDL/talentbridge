@@ -141,7 +141,8 @@ const companyResearchSchema = {
   required: [
     "status", "summary", "resolvedEntities", "industryPosition", "valueChainRole", "businessModel",
     "customerMarkets", "operatingStage", "products", "technologies", "technologyEvidence",
-    "industryBenchmarks", "sourceAssessment", "fit", "fitReasons", "jdMapping", "hrInsights", "gaps", "sourceIds"
+    "industryBenchmarks", "researchMap", "criticalChokepoints", "verificationGates",
+    "narrativeChecks", "sourceAssessment", "fit", "fitReasons", "jdMapping", "hrInsights", "gaps", "sourceIds"
   ],
   properties: {
     status: { type: "string", enum: ["researched", "insufficient"] },
@@ -196,6 +197,66 @@ const companyResearchSchema = {
           topic: { type: "string" },
           benchmark: { type: "string" },
           companyComparison: { type: "string" },
+          sourceIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 12 } }
+        }
+      }
+    },
+    researchMap: {
+      type: "object",
+      additionalProperties: false,
+      required: ["demandDriver", "valueChainPath", "candidateCompanyPosition", "openQuestions"],
+      properties: {
+        demandDriver: { type: "string" },
+        valueChainPath: { type: "array", minItems: 2, maxItems: 8, items: { type: "string" } },
+        candidateCompanyPosition: { type: "string" },
+        openQuestions: { type: "array", minItems: 1, maxItems: 6, items: { type: "string" } }
+      }
+    },
+    criticalChokepoints: {
+      type: "array",
+      minItems: 1,
+      maxItems: 5,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["node", "whyCritical", "companyExposure", "verificationStatus", "sourceIds"],
+        properties: {
+          node: { type: "string" },
+          whyCritical: { type: "string" },
+          companyExposure: { type: "string" },
+          verificationStatus: { type: "string", enum: ["已验证", "部分验证", "未验证"] },
+          sourceIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 12 } }
+        }
+      }
+    },
+    verificationGates: {
+      type: "array",
+      minItems: 2,
+      maxItems: 6,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["question", "judgment", "evidence", "sourceIds"],
+        properties: {
+          question: { type: "string" },
+          judgment: { type: "string", enum: ["通过", "部分通过", "未验证"] },
+          evidence: { type: "string" },
+          sourceIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 12 } }
+        }
+      }
+    },
+    narrativeChecks: {
+      type: "array",
+      minItems: 1,
+      maxItems: 4,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["claim", "evidenceStatus", "correction", "sourceIds"],
+        properties: {
+          claim: { type: "string" },
+          evidenceStatus: { type: "string", enum: ["有证据", "部分证据", "无证据"] },
+          correction: { type: "string" },
           sourceIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 12 } }
         }
       }
@@ -1092,6 +1153,36 @@ function insufficientCompanyResearch(company, reason, sources = [], resolvedEnti
       companyComparison: "暂不能比较",
       sourceIds: sources[0]?.id ? [sources[0].id] : [1]
     }],
+    researchMap: {
+      demandDriver: "公开信息不足",
+      valueChainPath: ["需求端待研究", "供给端待研究"],
+      candidateCompanyPosition: "暂未定位",
+      openQuestions: [reason]
+    },
+    criticalChokepoints: [{
+      node: "关键卡点待识别",
+      whyCritical: reason,
+      companyExposure: "未验证",
+      verificationStatus: "未验证",
+      sourceIds: sources[0]?.id ? [sources[0].id] : [1]
+    }],
+    verificationGates: [{
+      question: "公司是否直接参与目标岗位对应的业务节点？",
+      judgment: "未验证",
+      evidence: reason,
+      sourceIds: sources[0]?.id ? [sources[0].id] : [1]
+    }, {
+      question: "该业务节点是否与候选人所在主体一致？",
+      judgment: "未验证",
+      evidence: "候选人所属业务单元待确认",
+      sourceIds: sources[0]?.id ? [sources[0].id] : [1]
+    }],
+    narrativeChecks: [{
+      claim: "企业背景与目标岗位相关",
+      evidenceStatus: "无证据",
+      correction: reason,
+      sourceIds: sources[0]?.id ? [sources[0].id] : [1]
+    }],
     sourceAssessment: {
       primarySources: sources.filter(source => source.sourceCategory === "公司一手资料").length,
       independentSources: sources.filter(source => source.sourceCategory === "外部核验").length,
@@ -1158,6 +1249,15 @@ function referencedResearchSourceIds(result) {
     for (const id of item.sourceIds || []) ids.add(id);
   }
   for (const item of result.industryBenchmarks || []) {
+    for (const id of item.sourceIds || []) ids.add(id);
+  }
+  for (const item of result.criticalChokepoints || []) {
+    for (const id of item.sourceIds || []) ids.add(id);
+  }
+  for (const item of result.verificationGates || []) {
+    for (const id of item.sourceIds || []) ids.add(id);
+  }
+  for (const item of result.narrativeChecks || []) {
     for (const id of item.sourceIds || []) ids.add(id);
   }
   return ids;

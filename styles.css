@@ -411,6 +411,13 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .industry-benchmark strong { font-size: 10px; }
 .industry-benchmark p { margin: 3px 0; color: var(--text-2); font-size: 10px; line-height: 1.5; }
 .industry-benchmark small { color: #477351; font-size: 9px; line-height: 1.45; }
+.serenity-chokepoints { margin-top: 12px; padding: 11px 12px; border: 1px solid #eadfc9; border-radius: 6px; background: #fffbf4; }
+.serenity-chokepoints > span { display: block; margin-bottom: 7px; color: var(--text-3); font-size: 10px; font-weight: 600; }
+.serenity-chokepoints > div { display: grid; grid-template-columns: 66px minmax(0, 1fr); gap: 8px; padding: 7px 0; border-top: 1px solid #f0e7d8; }
+.serenity-chokepoints > div:first-of-type { border-top: 0; }
+.serenity-chokepoints p { margin: 0; color: var(--text-2); font-size: 10px; line-height: 1.5; }
+.serenity-chokepoints p strong, .serenity-chokepoints small { display: block; }
+.serenity-chokepoints small { grid-column: 2; color: #80643a; font-size: 9px; line-height: 1.45; }
 .research-fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
 .research-fit-grid > div { padding: 11px 12px; border: 1px solid var(--line-soft); border-radius: 6px; background: #fafafa; }
 .research-fit-grid span { display: block; margin-bottom: 7px; color: var(--text-3); font-size: 10px; font-weight: 600; }
