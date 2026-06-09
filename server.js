@@ -663,22 +663,56 @@ function openAlexAbstract(invertedIndex) {
   return words.filter(Boolean).join(" ");
 }
 
+function researchEnglishTerms(job) {
+  const text = `${job.industry || ""} ${job.title || ""} ${researchKeywords(job).join(" ")}`;
+  const dictionary = [
+    [/半导体|芯片/g, "semiconductor"],
+    [/先进封装|封装/g, "advanced packaging"],
+    [/晶圆/g, "wafer"],
+    [/键合/g, "bonding"],
+    [/人工智能|AI/gi, "artificial intelligence"],
+    [/新能源/g, "new energy"],
+    [/汽车/g, "automotive"],
+    [/电池/g, "battery"],
+    [/光伏/g, "photovoltaic"],
+    [/机器人/g, "robotics"],
+    [/医药|制药/g, "pharmaceutical"],
+    [/金融/g, "financial technology"],
+    [/软件|SaaS/gi, "software as a service"]
+  ];
+  return [...new Set(dictionary.filter(([pattern]) => pattern.test(text)).map(([, term]) => term))].join(" ");
+}
+
 async function discoverOpenAlexIndustrySources(job) {
   const terms = researchKeywords(job).slice(0, 5);
-  const query = [job.industry, job.title, ...terms].filter(Boolean).join(" ");
-  if (!query) return [];
+  const queries = [
+    [job.industry, job.title, ...terms].filter(Boolean).join(" "),
+    researchEnglishTerms(job)
+  ].filter(Boolean);
+  if (!queries.length) return [];
   try {
-    const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&filter=from_publication_date:2018-01-01&sort=relevance_score:desc&per-page=4`;
-    const response = await fetchWithLimit(url, "application/json");
-    const data = JSON.parse(response.text);
-    return (data.results || []).map(work => {
+    const groups = await Promise.all(queries.map(async query => {
+      const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&filter=from_publication_date:2018-01-01&sort=relevance_score:desc&per-page=4`;
+      const response = await fetchWithLimit(url, "application/json");
+      return JSON.parse(response.text).results || [];
+    }));
+    const uniqueWorks = new Map();
+    groups.flat().forEach(work => {
+      if (!uniqueWorks.has(work.id)) uniqueWorks.set(work.id, work);
+    });
+    return [...uniqueWorks.values()].map(work => {
       const abstract = openAlexAbstract(work.abstract_inverted_index);
       const venue = work.primary_location?.source?.display_name || "";
+      const topics = (work.topics || []).slice(0, 4).map(item => item.display_name).filter(Boolean);
+      const keywords = (work.keywords || []).slice(0, 6).map(item => item.display_name).filter(Boolean);
       const content = [
         work.title,
         abstract,
+        topics.length ? `研究主题：${topics.join("、")}` : "",
+        keywords.length ? `关键词：${keywords.join("、")}` : "",
         venue ? `发表来源：${venue}` : "",
-        work.publication_year ? `发表年份：${work.publication_year}` : ""
+        work.publication_year ? `发表年份：${work.publication_year}` : "",
+        Number.isFinite(work.cited_by_count) ? `被引用次数：${work.cited_by_count}` : ""
       ].filter(Boolean).join("。");
       return {
         title: `${work.title} · OpenAlex`,
@@ -688,7 +722,7 @@ async function discoverOpenAlexIndustrySources(job) {
         evidenceLevel: "学术技术资料",
         sourceCategory: "行业参照"
       };
-    }).filter(item => item.content.length >= 120);
+    }).filter(item => item.content.length >= 50).slice(0, 4);
   } catch (error) {
     console.warn("OpenAlex industry research failed:", error.message);
     return [];
@@ -836,6 +870,20 @@ function sanitizeCompanyResearchEvidence(result) {
   };
 }
 
+function referencedResearchSourceIds(result) {
+  const ids = new Set(result.sourceIds || []);
+  for (const item of result.technologyEvidence || []) {
+    for (const id of item.sourceIds || []) ids.add(id);
+  }
+  for (const item of result.jdMapping || []) {
+    for (const id of item.sourceIds || []) ids.add(id);
+  }
+  for (const item of result.industryBenchmarks || []) {
+    for (const id of item.sourceIds || []) ids.add(id);
+  }
+  return ids;
+}
+
 async function researchCompany(payload) {
   const company = String(payload.company || "").trim();
   const job = payload.job || {};
@@ -873,13 +921,16 @@ async function researchCompany(payload) {
     input: `待研究企业：${company}\n候选人岗位：${payload.role || "未说明"}\n目标岗位：${JSON.stringify(job)}\n\n公开网页：\n${sourceInput}`
   });
   const sanitizedResult = sanitizeCompanyResearchEvidence(result);
-  const selectedIds = new Set(sanitizedResult.sourceIds);
-  const selectedSources = sources
-    .filter(source => selectedIds.has(source.id))
+  const selectedIds = referencedResearchSourceIds(sanitizedResult);
+  const selectedSourceObjects = sources.filter(source => selectedIds.has(source.id));
+  for (const category of ["公司一手资料", "外部核验", "行业参照"]) {
+    const categorySources = sources.filter(source => source.sourceCategory === category);
+    const existingCount = selectedSourceObjects.filter(source => source.sourceCategory === category).length;
+    selectedSourceObjects.push(...categorySources.filter(source => !selectedSourceObjects.includes(source)).slice(0, Math.max(0, 2 - existingCount)));
+  }
+  const finalSources = (selectedSourceObjects.length ? selectedSourceObjects : sources.slice(0, 8))
+    .slice(0, 10)
     .map(({ id, title, url, domain, evidenceLevel, sourceCategory }) => ({ id, title, url, domain, evidenceLevel, sourceCategory }));
-  const finalSources = selectedSources.length
-    ? selectedSources
-    : sources.slice(0, 6).map(({ id, title, url, domain, evidenceLevel, sourceCategory }) => ({ id, title, url, domain, evidenceLevel, sourceCategory }));
   const sourceCounts = {
     primarySources: finalSources.filter(source => source.sourceCategory === "公司一手资料").length,
     independentSources: finalSources.filter(source => ["外部核验", "实体识别"].includes(source.sourceCategory)).length,
