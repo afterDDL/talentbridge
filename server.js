@@ -1017,8 +1017,14 @@ function insufficientCompanyResearch(company, reason, sources = [], resolvedEnti
 
 function sanitizeCompanyResearchEvidence(result) {
   const inferredEvidence = /必然涉及|通常具备|一般会|理应具备|必然会/;
+  const sanitizeAbsenceClaim = value => String(value || "")
+    .replace(/封装(?:环节|制造)?外包/g, "封装制造角色未由公开来源明确证明")
+    .replace(/未涉及([^，。；]+)/g, "未找到$1的公开证据");
   return {
     ...result,
+    summary: sanitizeAbsenceClaim(result.summary),
+    industryPosition: sanitizeAbsenceClaim(result.industryPosition),
+    valueChainRole: sanitizeAbsenceClaim(result.valueChainRole),
     technologyEvidence: (result.technologyEvidence || []).map(item => ({
       ...item,
       evidence: inferredEvidence.test(item.evidence)
@@ -1037,8 +1043,9 @@ function sanitizeCompanyResearchEvidence(result) {
       };
     }),
     fitReasons: (result.fitReasons || []).map(item => (
-      inferredEvidence.test(item) ? "公开来源未明确证明该项岗位关联。" : item
-    ))
+      inferredEvidence.test(item) ? "公开来源未明确证明该项岗位关联。" : sanitizeAbsenceClaim(item)
+    )),
+    gaps: (result.gaps || []).map(sanitizeAbsenceClaim)
   };
 }
 
