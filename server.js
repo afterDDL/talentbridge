@@ -71,7 +71,8 @@ const resumeSchema = {
   required: [
     "name", "role", "company", "group", "verdict", "ats", "recovered",
     "coverage", "core", "gap", "quote", "facts", "transferable", "target",
-    "verify", "questions"
+    "verify", "questions", "companyContext", "comparability", "transferBoundary",
+    "transferConfidence"
   ],
   properties: {
     name: { type: "string" },
@@ -87,6 +88,37 @@ const resumeSchema = {
     quote: { type: "string" },
     facts: { type: "array", minItems: 1, maxItems: 5, items: { type: "string" } },
     transferable: { type: "array", minItems: 1, maxItems: 5, items: { type: "string" } },
+    companyContext: {
+      type: "object",
+      additionalProperties: false,
+      required: ["companyType", "products", "technologyPlatform", "productionStage", "evidenceNote"],
+      properties: {
+        companyType: { type: "string" },
+        products: { type: "array", minItems: 1, maxItems: 4, items: { type: "string" } },
+        technologyPlatform: { type: "array", minItems: 1, maxItems: 5, items: { type: "string" } },
+        productionStage: { type: "string" },
+        evidenceNote: { type: "string" }
+      }
+    },
+    comparability: {
+      type: "array",
+      minItems: 5,
+      maxItems: 5,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["dimension", "candidateEvidence", "targetRequirement", "judgment", "reason"],
+        properties: {
+          dimension: { type: "string", enum: ["任务对象", "技术机理", "问题复杂度", "量产阶段", "个人责任"] },
+          candidateEvidence: { type: "string" },
+          targetRequirement: { type: "string" },
+          judgment: { type: "string", enum: ["可比", "部分可比", "未证实"] },
+          reason: { type: "string" }
+        }
+      }
+    },
+    transferBoundary: { type: "array", minItems: 1, maxItems: 5, items: { type: "string" } },
+    transferConfidence: { type: "string", enum: ["高", "中", "低"] },
     target: { type: "array", minItems: 1, maxItems: 5, items: { type: "string" } },
     verify: { type: "array", minItems: 1, maxItems: 5, items: { type: "string" } },
     questions: { type: "array", minItems: 2, maxItems: 5, items: { type: "string" } }
@@ -310,7 +342,15 @@ function demoAnalyzeResume({ resume, job }) {
     : isSaasSales
       ? /大客户|解决方案|长周期|项目|决策链|回款/i.test(resume)
       : facts.length >= 1 || /项目|负责|主导|改善|交付|管理|研发|方案|量产|良率/.test(resume);
-  const group = hasDirect ? "priority" : hasTransfer ? "review" : "unknown";
+  const hasOwnership = /主导|独立|负责[^。\n]{0,20}(?:平台|模块|工艺|产品|项目|客户|区域)/.test(resume);
+  const hasDeliveryStage = /量产|交付|上线|签约|回款|续约/.test(resume);
+  const specificEvidence = isChip3d
+    ? [...new Set(resume.match(/2\.5D|CoWoS|中介层|微凸点|互连|翘曲|良率|可靠性|键合/gi) || [])].length
+    : isSaasSales
+      ? [...new Set(resume.match(/大客户|解决方案|决策链|签约|回款|续约|商机|售前/gi) || [])].length
+      : facts.length;
+  const hasComparableEvidence = hasTransfer && hasOwnership && hasDeliveryStage && specificEvidence >= 2;
+  const group = hasDirect ? "priority" : hasComparableEvidence ? "review" : "unknown";
   const verdict = group === "priority" ? "优先联系" : group === "review" ? "值得复核" : "信息不足";
   const inferredFacts = facts.length ? facts : ["简历已导入", "相关经历待进一步结构化"];
   return {
@@ -320,13 +360,29 @@ function demoAnalyzeResume({ resume, job }) {
     group,
     verdict,
     ats: hasDirect,
-    recovered: !hasDirect && hasTransfer,
-    coverage: hasDirect ? 82 : hasTransfer ? 66 : 40,
+    recovered: !hasDirect && hasComparableEvidence,
+    coverage: hasDirect ? 82 : hasComparableEvidence ? 64 : 40,
     core: inferredFacts.slice(0, 3).join("、"),
     gap: "经历范围、责任边界与结果证据待确认",
     quote: resume.slice(0, 180).replace(/\s+/g, " "),
     facts: inferredFacts,
-    transferable: hasTransfer ? ["相似业务任务", "可复用的问题解决方法", "相邻场景经验"] : ["经历信息待补充"],
+    companyContext: {
+      companyType: "简历未明确说明",
+      products: ["产品形态待确认"],
+      technologyPlatform: facts.length ? facts : ["技术平台待确认"],
+      productionStage: /量产|交付|上线/.test(resume) ? "简历提及量产或交付" : "研发或量产阶段待确认",
+      evidenceNote: "演示模式仅依据简历字面信息，不补充外部公司知识"
+    },
+    comparability: [
+      { dimension: "任务对象", candidateEvidence: inferredFacts[0] || "待确认", targetRequirement: "目标岗位核心任务", judgment: hasTransfer ? "部分可比" : "未证实", reason: "仅识别到相邻任务线索" },
+      { dimension: "技术机理", candidateEvidence: inferredFacts[1] || "待确认", targetRequirement: "目标岗位技术平台", judgment: hasDirect ? "可比" : "未证实", reason: hasDirect ? "存在直接技术关键词" : "缺少机理层证据" },
+      { dimension: "问题复杂度", candidateEvidence: /主导|复杂|良率|失效|千万/.test(resume) ? "简历存在复杂问题线索" : "待确认", targetRequirement: "目标岗位问题复杂度", judgment: hasTransfer ? "部分可比" : "未证实", reason: "需确认问题规模与约束条件" },
+      { dimension: "量产阶段", candidateEvidence: /量产|交付|上线/.test(resume) ? "有量产或交付表述" : "待确认", targetRequirement: "目标岗位交付阶段", judgment: /量产|交付|上线/.test(resume) ? "部分可比" : "未证实", reason: "需确认规模和成熟度" },
+      { dimension: "个人责任", candidateEvidence: /主导|负责|独立/.test(resume) ? "有负责或主导表述" : "待确认", targetRequirement: "独立负责关键结果", judgment: /主导|独立/.test(resume) ? "部分可比" : "未证实", reason: "责任边界仍需面试核实" }
+    ],
+    transferable: hasTransfer ? ["仅可初步迁移相似任务中的问题分析方法", "具体技术平台经验不可直接外推"] : ["经历信息待补充"],
+    transferBoundary: ["公司产品与技术平台未明确时，不外推为直接相关经验", "未证明个人责任和量产规模时，不外推为独立交付能力"],
+    transferConfidence: hasDirect ? "中" : hasComparableEvidence ? "中" : "低",
     target: (job.model || []).slice(0, 3).map(item => Array.isArray(item) ? item[0] : item.name),
     verify: ["个人责任范围", "项目复杂度", "量化结果"],
     questions: [
@@ -364,6 +420,13 @@ async function analyzeResume(payload) {
       "目标是扩大合理召回并控制复核成本，而不是自动淘汰或录用。",
       "事实必须来自简历原文；推断必须保守；证据不足标记为待验证。",
       "不得补造候选人的公司、技术、业绩或责任范围。",
+      "必须单独提取候选人原公司的产品形态、技术平台、工艺或业务代际、研发/试产/量产阶段；简历未写明时明确写“未说明”，不得依靠公司名称猜测。",
+      "迁移判断必须逐项比较五个维度：任务对象、技术机理、问题复杂度、量产阶段、个人责任。",
+      "“做过相似任务”“都负责良率/销售/项目”“同属一个行业”只能作为线索，不能单独证明能力可迁移。",
+      "只有五个维度中至少三项有明确可比证据，且任务对象或技术机理至少一项为“可比”，个人责任不存在明显降级，才可判为“值得复核”或 recovered=true。",
+      "若公司产品技术背景、量产阶段或个人责任缺失，不得用行业常识补齐；transferConfidence 必须为“低”，通常应判为“信息不足”。",
+      "“优先联系”仅用于目标技术/业务场景和责任范围均有直接证据的候选人；相邻经历默认最高为“值得复核”。",
+      "transferable 只写已经被可比证据支持的能力；transferBoundary 明确列出不能从现有经历直接外推到目标岗位的部分。",
       "不得分析年龄、性别、婚育、民族等敏感属性。",
       "ATS 命中表示简历是否出现目标岗位的直接关键词。",
       "recovered 仅在 ATS 未命中但存在可信迁移路径时为 true。",

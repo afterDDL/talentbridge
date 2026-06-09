@@ -22,7 +22,23 @@ const jobs = {
         core: "工艺开发、翘曲控制、量产良率", gap: "混合键合与超细间距互连待确认",
         quote: "负责 2.5D 先进封装平台工艺开发及量产良率改善，主导解决大尺寸中介层翘曲与微凸点互连失效问题。",
         facts: ["2.5D 工艺开发", "量产良率改善", "翘曲控制", "微凸点互连"],
+        companyContext: {
+          companyType: "先进封装制造与量产平台",
+          products: ["2.5D 中介层封装产品", "大尺寸封装结构"],
+          technologyPlatform: ["Interposer", "微凸点互连", "翘曲控制"],
+          productionStage: "简历明确提及量产良率改善",
+          evidenceNote: "仅依据简历中的平台、结构与量产表述，不推断公司未披露产品"
+        },
+        comparability: [
+          { dimension: "任务对象", candidateEvidence: "2.5D 先进封装平台工艺开发", targetRequirement: "3D 先进封装工艺开发", judgment: "可比", reason: "均涉及复杂先进封装结构的工艺窗口建立" },
+          { dimension: "技术机理", candidateEvidence: "微凸点互连与中介层", targetRequirement: "混合键合、TSV 与超细间距互连", judgment: "部分可比", reason: "互连与翘曲机理相邻，但关键连接方式和尺寸代际不同" },
+          { dimension: "问题复杂度", candidateEvidence: "大尺寸中介层翘曲和互连失效", targetRequirement: "3D 堆叠热应力、翘曲与互连可靠性", judgment: "可比", reason: "问题均跨结构、材料和制程参数" },
+          { dimension: "量产阶段", candidateEvidence: "量产良率改善", targetRequirement: "量产导入与良率爬坡", judgment: "可比", reason: "均需要在量产约束下完成问题闭环" },
+          { dimension: "个人责任", candidateEvidence: "主导解决关键失效问题", targetRequirement: "独立推动工艺优化", judgment: "部分可比", reason: "有主导表述，但完整模块所有权仍需确认" }
+        ],
         transferable: ["复杂结构工艺窗口建立", "互连失效定位", "跨制程良率闭环"],
+        transferBoundary: ["不能将微凸点互连经验直接等同于混合键合经验", "不能据此确认其掌握 TSV、晶圆减薄或超细间距互连", "需核实其在平台开发中的模块所有权和决策边界"],
+        transferConfidence: "中",
         target: ["3D 堆叠工艺开发", "键合与互连优化", "热应力 / 翘曲控制"],
         verify: ["混合键合", "晶圆级减薄", "超细间距互连"],
         questions: [
@@ -1248,6 +1264,38 @@ function evaluationRow(candidate) {
     </tr>`;
 }
 
+function companyContextFor(candidate) {
+  return candidate.companyContext || {
+    companyType: "简历未说明",
+    products: ["产品或服务形态待确认"],
+    technologyPlatform: ["技术平台待确认"],
+    productionStage: "研发、试产或量产阶段待确认",
+    evidenceNote: "现有简历信息不足，不根据公司名称推测业务背景"
+  };
+}
+
+function comparabilityFor(candidate) {
+  if (Array.isArray(candidate.comparability) && candidate.comparability.length) return candidate.comparability;
+  const dimensions = ["任务对象", "技术机理", "问题复杂度", "量产阶段", "个人责任"];
+  return dimensions.map((dimension, index) => ({
+    dimension,
+    candidateEvidence: candidate.facts?.[index] || "简历未提供明确证据",
+    targetRequirement: candidate.target?.[Math.min(index, (candidate.target?.length || 1) - 1)] || "目标要求待对齐",
+    judgment: "未证实",
+    reason: "旧版分析未完成该维度的严格比较，建议重新导入分析"
+  }));
+}
+
+function transferBoundaryFor(candidate) {
+  return candidate.transferBoundary?.length
+    ? candidate.transferBoundary
+    : [`不能仅凭“${candidate.core}”直接外推为目标岗位经验`, candidate.gap || "关键技术与责任边界待确认"];
+}
+
+function comparabilityClass(judgment) {
+  return judgment === "可比" ? "green" : judgment === "部分可比" ? "amber" : "gray";
+}
+
 function renderCandidateDetail(candidateId) {
   const job = currentJob();
   const c = job.candidates.find(item => item.id === candidateId);
@@ -1257,6 +1305,10 @@ function renderCandidateDetail(candidateId) {
   setActiveSidebar();
   renderRecentJobs();
   const verdictClass = c.group === "priority" ? "green" : c.group === "review" ? "blue" : c.group === "unknown" ? "amber" : "gray";
+  const companyContext = companyContextFor(c);
+  const comparability = comparabilityFor(c);
+  const transferBoundary = transferBoundaryFor(c);
+  const confidence = c.transferConfidence || (c.group === "priority" ? "中" : "低");
   main.innerHTML = `
     <section class="page">
       <div class="page-head" style="padding-bottom:18px">
@@ -1278,21 +1330,46 @@ function renderCandidateDetail(candidateId) {
                   </div>
                   <span class="tag ${verdictClass}">${c.verdict}</span>
                 </div>
-                <div class="verdict"><strong>${c.verdict}：${c.core}</strong><p>${c.recovered ? "传统 ATS 因缺少目标岗位关键词而未命中；AI 发现其底层任务和问题复杂度与岗位存在可信关联。" : "系统根据直接证据、岗位要求及信息完整度生成该建议。"} 关键缺口：${c.gap}。</p></div>
+                <div class="verdict"><strong>${c.verdict}：${c.core}</strong><p>迁移判断置信度：${confidence}。${c.recovered ? "传统 ATS 未命中，但候选人在部分关键维度存在可比证据；这不等于直接具备目标岗位经验。" : "系统根据直接证据、岗位要求及信息完整度生成该建议。"} 关键缺口：${c.gap}。</p></div>
               </div>
             </div>
             <div class="card">
-              <div class="card-head"><div><h2>能力迁移路径</h2><p>从候选人实际经历出发，而不是从岗位名称出发</p></div></div>
+              <div class="card-head"><div><h2>原公司产品与技术背景</h2><p>只呈现简历有证据支持的背景，不根据公司名称补充外部推测</p></div><span class="tag ${confidence === "高" ? "green" : confidence === "中" ? "amber" : "gray"}">迁移置信度 ${confidence}</span></div>
+              <div class="card-body">
+                <div class="company-context-grid">
+                  <div><span>公司 / 业务类型</span><strong>${companyContext.companyType}</strong></div>
+                  <div><span>产品或服务形态</span><strong>${companyContext.products.join("、")}</strong></div>
+                  <div><span>技术 / 业务平台</span><strong>${companyContext.technologyPlatform.join("、")}</strong></div>
+                  <div><span>所处阶段</span><strong>${companyContext.productionStage}</strong></div>
+                </div>
+                <p class="context-note">${companyContext.evidenceNote}</p>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><div><h2>迁移可比条件</h2><p>逐项判断经历是否真的处于可比较的业务与技术条件下</p></div></div>
+              <div class="card-body" style="padding-top:6px">
+                <table class="comparability-table">
+                  <thead><tr><th>维度</th><th>候选人证据</th><th>目标岗位要求</th><th>判断</th><th>判断理由</th></tr></thead>
+                  <tbody>${comparability.map(item => `<tr><td><strong>${item.dimension}</strong></td><td>${item.candidateEvidence}</td><td>${item.targetRequirement}</td><td><span class="tag ${comparabilityClass(item.judgment)}">${item.judgment}</span></td><td>${item.reason}</td></tr>`).join("")}</tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><div><h2>能力迁移路径</h2><p>仅保留已被可比条件支持的迁移项</p></div></div>
               <div class="card-body">
                 <div class="legend"><span><i style="background:var(--green)"></i>简历事实</span><span><i style="background:var(--purple)"></i>AI 推断</span><span><i style="background:var(--amber)"></i>待人工验证</span></div>
                 <div class="migration-map">
                   <div class="map-column"><h4>候选人做过什么</h4>${c.facts.map(x => `<div class="map-node fact">${x}</div>`).join("")}</div>
                   <div class="map-arrow">→</div>
-                  <div class="map-column center"><h4>可迁移的底层能力</h4>${c.transferable.map(x => `<div class="map-node infer">${x}</div>`).join("")}</div>
+                  <div class="map-column center"><h4>有证据支持的可迁移能力</h4>${c.transferable.map(x => `<div class="map-node infer">${x}</div>`).join("")}</div>
                   <div class="map-arrow">→</div>
                   <div class="map-column target"><h4>目标岗位需要什么</h4>${c.target.map(x => `<div class="map-node">${x}</div>`).join("")}${c.verify.slice(0,2).map(x => `<div class="map-node verify">${x} · 待验证</div>`).join("")}</div>
                 </div>
               </div>
+            </div>
+            <div class="card transfer-boundary-card">
+              <div class="card-head"><div><h2>不可直接外推</h2><p>相邻经历不等于目标岗位直接经验</p></div></div>
+              <div class="card-body"><ul class="boundary-list">${transferBoundary.map(item => `<li>${item}</li>`).join("")}</ul></div>
             </div>
             <div class="card">
               <div class="card-head"><div><h2>证据与判断依据</h2><p>事实、推断和缺口分开展示</p></div></div>
@@ -1300,7 +1377,9 @@ function renderCandidateDetail(candidateId) {
                 <table class="evidence-table">
                   <tr><th>类型</th><th>内容</th><th>来源</th></tr>
                   <tr><td><span class="tag green">简历事实</span></td><td><div class="quote">“${c.quote}”</div></td><td class="tiny">候选人简历</td></tr>
-                  <tr><td><span class="tag purple">AI 推断</span></td><td>${c.transferable.join("、")}可迁移至目标岗位的相似任务。</td><td class="tiny">岗位模型 + 经历对齐</td></tr>
+                  <tr><td><span class="tag blue">背景约束</span></td><td>${companyContext.products.join("、")}；${companyContext.technologyPlatform.join("、")}；${companyContext.productionStage}</td><td class="tiny">候选人简历</td></tr>
+                  <tr><td><span class="tag purple">AI 推断</span></td><td>${c.transferable.join("、")}。仅在上述可比条件成立时可迁移。</td><td class="tiny">五维可比分析</td></tr>
+                  <tr><td><span class="tag red">外推边界</span></td><td>${transferBoundary.join("；")}</td><td class="tiny">保守判断规则</td></tr>
                   <tr><td><span class="tag amber">待验证</span></td><td>${c.verify.join("、")}</td><td class="tiny">简历暂未提供证据</td></tr>
                 </table>
               </div>
@@ -1793,7 +1872,15 @@ function buildCandidateFromText(text, job) {
     : job.id === "sales"
       ? /大客户|解决方案|长周期|项目|决策链|回款/i.test(text)
       : facts.length >= 1 || /项目|负责|主导|改善|交付|管理|研发|方案/.test(text);
-  const group = hasDirectKeyword ? "priority" : hasTransferEvidence ? "review" : "unknown";
+  const hasOwnership = /主导|独立|负责[^。\n]{0,20}(?:平台|模块|工艺|产品|项目|客户|区域)/.test(text);
+  const hasDeliveryStage = /量产|交付|上线|签约|回款|续约/.test(text);
+  const specificEvidence = job.id === "chip"
+    ? [...new Set(text.match(/2\.5D|CoWoS|中介层|微凸点|互连|翘曲|良率|可靠性|键合/gi) || [])].length
+    : job.id === "sales"
+      ? [...new Set(text.match(/大客户|解决方案|决策链|签约|回款|续约|商机|售前/gi) || [])].length
+      : facts.length;
+  const hasComparableEvidence = hasTransferEvidence && hasOwnership && hasDeliveryStage && specificEvidence >= 2;
+  const group = hasDirectKeyword ? "priority" : hasComparableEvidence ? "review" : "unknown";
   const coverage = hasDirectKeyword ? 84 : hasTransferEvidence ? 69 : 43;
   const inferredFacts = facts.length ? facts : ["简历已导入", "相关经历待进一步结构化"];
 
@@ -1808,13 +1895,29 @@ function buildCandidateFromText(text, job) {
     group,
     verdict: group === "priority" ? "优先联系" : group === "review" ? "值得复核" : "信息不足",
     ats: hasDirectKeyword,
-    recovered: !hasDirectKeyword && hasTransferEvidence,
-    coverage,
+    recovered: !hasDirectKeyword && hasComparableEvidence,
+    coverage: hasComparableEvidence ? coverage : Math.min(coverage, 49),
     core: inferredFacts.slice(0, 3).join("、"),
     gap: "经历范围、责任边界与结果证据待确认",
     quote: text.slice(0, 160).replace(/\s+/g, " "),
     facts: inferredFacts,
-    transferable: hasTransferEvidence ? ["相似业务任务", "可复用的问题解决方法", "相邻场景经验"] : ["经历信息待补充"],
+    companyContext: {
+      companyType: "简历未说明",
+      products: ["产品或服务形态待确认"],
+      technologyPlatform: facts.length ? facts : ["技术平台待确认"],
+      productionStage: /量产|交付|上线/.test(text) ? "简历提及量产或交付" : "研发、试产或量产阶段待确认",
+      evidenceNote: "本地兜底分析不根据公司名称推测业务与技术背景"
+    },
+    comparability: [
+      { dimension: "任务对象", candidateEvidence: inferredFacts[0] || "未说明", targetRequirement: job.model[0]?.[0] || "目标核心任务", judgment: hasTransferEvidence ? "部分可比" : "未证实", reason: "仅有相邻任务线索，具体对象与约束待确认" },
+      { dimension: "技术机理", candidateEvidence: inferredFacts[1] || "未说明", targetRequirement: job.model[1]?.[0] || "目标技术平台", judgment: hasDirectKeyword ? "可比" : "未证实", reason: hasDirectKeyword ? "存在直接技术关键词" : "缺少技术机理层证据" },
+      { dimension: "问题复杂度", candidateEvidence: /主导|复杂|良率|失效|千万/.test(text) ? "存在复杂问题线索" : "未说明", targetRequirement: "目标岗位问题复杂度", judgment: "未证实", reason: "问题规模、约束条件和结果待确认" },
+      { dimension: "量产阶段", candidateEvidence: /量产|交付|上线/.test(text) ? "提及量产或交付" : "未说明", targetRequirement: "目标岗位交付阶段", judgment: /量产|交付|上线/.test(text) ? "部分可比" : "未证实", reason: "规模和成熟度待确认" },
+      { dimension: "个人责任", candidateEvidence: /主导|独立/.test(text) ? "有主导或独立表述" : "责任边界未说明", targetRequirement: "独立负责关键结果", judgment: /主导|独立/.test(text) ? "部分可比" : "未证实", reason: "需确认个人决策权与结果责任" }
+    ],
+    transferable: hasDirectKeyword ? ["直接技术或业务经验有待进一步核实"] : hasTransferEvidence ? ["仅识别到相邻任务中的问题分析方法线索"] : ["经历信息待补充"],
+    transferBoundary: ["公司产品与技术平台未明确时，不外推为直接相关经验", "个人责任和项目阶段未证明时，不外推为独立交付能力"],
+    transferConfidence: hasDirectKeyword ? "中" : hasComparableEvidence ? "中" : "低",
     target: job.model.slice(0, 3).map(item => item[0]),
     verify: ["个人责任范围", "项目复杂度", "量化结果"],
     questions: [
@@ -1873,6 +1976,9 @@ function exportQueueCsv() {
 function candidateReportMarkdown(candidate) {
   const job = currentJob();
   const decision = state.decisions[`${job.id}:${candidate.id}`];
+  const companyContext = companyContextFor(candidate);
+  const comparability = comparabilityFor(candidate);
+  const transferBoundary = transferBoundaryFor(candidate);
   return `# ${candidate.name}｜能力迁移分析
 
 ## 分析对象
@@ -1884,6 +1990,7 @@ function candidateReportMarkdown(candidate) {
 - ATS 结果：${candidate.ats ? "关键词命中" : "未命中"}
 - AI 新找回：${candidate.recovered ? "是" : "否"}
 - 能力证据覆盖：${candidate.coverage}%
+- 迁移判断置信度：${candidate.transferConfidence || "低"}
 
 ## 结论
 
@@ -1899,9 +2006,27 @@ ${candidate.facts.map(item => `- ${item}`).join("\n")}
 
 > ${candidate.quote}
 
-## 可迁移能力
+## 原公司产品与技术背景
+
+- 公司 / 业务类型：${companyContext.companyType}
+- 产品或服务形态：${companyContext.products.join("、")}
+- 技术 / 业务平台：${companyContext.technologyPlatform.join("、")}
+- 所处阶段：${companyContext.productionStage}
+- 证据说明：${companyContext.evidenceNote}
+
+## 迁移可比条件
+
+| 维度 | 候选人证据 | 目标岗位要求 | 判断 | 理由 |
+| --- | --- | --- | --- | --- |
+${comparability.map(item => `| ${item.dimension} | ${item.candidateEvidence} | ${item.targetRequirement} | ${item.judgment} | ${item.reason} |`).join("\n")}
+
+## 有证据支持的可迁移能力
 
 ${candidate.transferable.map(item => `- ${item}`).join("\n")}
+
+## 不可直接外推
+
+${transferBoundary.map(item => `- ${item}`).join("\n")}
 
 ## 目标岗位关联
 
