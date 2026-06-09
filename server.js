@@ -553,6 +553,21 @@ async function fetchWikidataEntity(id) {
   return JSON.parse(response.text).entities?.[id] || null;
 }
 
+async function fetchWikidataEntities(ids) {
+  const uniqueIds = [...new Set(ids)].filter(Boolean).slice(0, 50);
+  if (!uniqueIds.length) return {};
+  const url = [
+    "https://www.wikidata.org/w/api.php?action=wbgetentities",
+    `ids=${encodeURIComponent(uniqueIds.join("|"))}`,
+    "props=labels%7Cdescriptions%7Caliases%7Cclaims%7Csitelinks",
+    "languages=zh%7Cen",
+    "format=json",
+    "origin=*"
+  ].join("&");
+  const response = await fetchWithLimit(url, "application/json");
+  return JSON.parse(response.text).entities || {};
+}
+
 function wikidataLinkedEntityIds(entity) {
   const relationships = [
     ["P355", "子公司"],
@@ -611,27 +626,6 @@ async function entitySourceBundle(entity, entityId, relationship, job) {
       description: `${label}的 Wikidata 官方网站字段`,
       evidenceLevel: "企业官网"
     });
-  }
-  const wikiSite = entity.sitelinks?.zhwiki || entity.sitelinks?.enwiki;
-  if (wikiSite?.title) {
-    const language = entity.sitelinks?.zhwiki ? "zh" : "en";
-    try {
-      const wikiApi = `https://${language}.wikipedia.org/w/api.php?action=query&prop=extracts%7Cinfo&explaintext=1&inprop=url&titles=${encodeURIComponent(wikiSite.title)}&format=json&origin=*`;
-      const response = await fetchWithLimit(wikiApi, "application/json");
-      const page = Object.values(JSON.parse(response.text).query?.pages || {})[0];
-      if (page?.extract) {
-        sources.push({
-          title: `${page.title} · Wikipedia`,
-          url: page.fullurl || `https://${language}.wikipedia.org/wiki/${encodeURIComponent(wikiSite.title.replace(/ /g, "_"))}`,
-          domain: `${language}.wikipedia.org`,
-          content: page.extract.slice(0, 8000),
-          evidenceLevel: "百科正文",
-          sourceCategory: "外部核验"
-        });
-      }
-    } catch (error) {
-      console.warn("Related entity Wikipedia lookup failed:", error.message);
-    }
   }
   const names = [label, ...(entity.aliases?.zh || []).map(item => item.value), ...(entity.aliases?.en || []).map(item => item.value)]
     .filter(Boolean).slice(0, 6);
@@ -731,14 +725,16 @@ async function discoverStructuredCompanySources(company, job) {
     linkedIds.forEach(linked => {
       if (!uniqueLinkedIds.has(linked.id)) uniqueLinkedIds.set(linked.id, linked);
     });
-    const linkedEntities = await Promise.all([...uniqueLinkedIds.values()].slice(0, 50).map(async linked => {
-      try {
-        const linkedEntity = await fetchWikidataEntity(linked.id);
-        return linkedEntity ? entitySourceBundle(linkedEntity, linked.id, linked.relationship, job) : null;
-      } catch (error) {
-        console.warn("Related entity lookup failed:", error.message);
-        return null;
-      }
+    const linkedValues = [...uniqueLinkedIds.values()].slice(0, 50);
+    let linkedEntityMap = {};
+    try {
+      linkedEntityMap = await fetchWikidataEntities(linkedValues.map(item => item.id));
+    } catch (error) {
+      console.warn("Related entity batch lookup failed:", error.message);
+    }
+    const linkedEntities = await Promise.all(linkedValues.map(linked => {
+      const linkedEntity = linkedEntityMap[linked.id];
+      return linkedEntity ? entitySourceBundle(linkedEntity, linked.id, linked.relationship, job) : null;
     }));
     linkedEntities.filter(bundle => bundle?.relevant).slice(0, 4).forEach(bundle => {
       directSources.push(...bundle.sources);
