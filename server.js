@@ -225,7 +225,7 @@ const companyResearchSchema = {
           whyCritical: { type: "string" },
           companyExposure: { type: "string" },
           verificationStatus: { type: "string", enum: ["已验证", "部分验证", "未验证"] },
-          sourceIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 12 } }
+          sourceIds: { type: "array", minItems: 0, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 12 } }
         }
       }
     },
@@ -241,7 +241,7 @@ const companyResearchSchema = {
           question: { type: "string" },
           judgment: { type: "string", enum: ["通过", "部分通过", "未验证"] },
           evidence: { type: "string" },
-          sourceIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 12 } }
+          sourceIds: { type: "array", minItems: 0, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 12 } }
         }
       }
     },
@@ -257,7 +257,7 @@ const companyResearchSchema = {
           claim: { type: "string" },
           evidenceStatus: { type: "string", enum: ["有证据", "部分证据", "无证据"] },
           correction: { type: "string" },
-          sourceIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 12 } }
+          sourceIds: { type: "array", minItems: 0, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 12 } }
         }
       }
     },
