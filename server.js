@@ -559,6 +559,7 @@ async function searchResearchWeb(queries) {
 async function discoverStructuredCompanySources(company) {
   const directSources = [];
   const pageCandidates = [];
+  let officialHost = "";
   try {
     const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(company)}&language=zh&limit=3&format=json&origin=*`;
     const searchResponse = await fetchWithLimit(searchUrl, "application/json");
@@ -585,6 +586,7 @@ async function discoverStructuredCompanySources(company) {
 
     const officialUrl = entity.claims?.P856?.[0]?.mainsnak?.datavalue?.value;
     if (officialUrl) {
+      officialHost = new URL(officialUrl).hostname.replace(/^www\./, "");
       pageCandidates.push({
         title: `${label}官方网站`,
         url: officialUrl,
@@ -614,16 +616,20 @@ async function discoverStructuredCompanySources(company) {
   } catch (error) {
     console.warn("Structured company discovery failed:", error.message);
   }
-  return { directSources, pageCandidates };
+  return { directSources, pageCandidates, officialHost };
 }
 
-async function discoverCompanyPages(company, job) {
+async function discoverCompanyPages(company, job, officialHost = "") {
   const keywordText = researchKeywords(job).slice(0, 5).join(" ");
   const queries = [
     `"${company}" 官网 产品 技术`,
     `"${company}" 产业链 客户 应用 业务`,
     `"${company}" 年报 技术 平台 制造 量产`,
-    `"${company}" ${keywordText}`
+    `"${company}" ${keywordText}`,
+    ...(officialHost ? [
+      `site:${officialHost} ${keywordText} technology product`,
+      `site:${officialHost} annual report investor technology`
+    ] : [])
   ];
   const discovered = await searchResearchWeb(queries);
   const blockedHosts = /(?:bing|baidu|google|duckduckgo|facebook|linkedin|zhihu|weibo|bilibili)\./i;
@@ -634,7 +640,59 @@ async function discoverCompanyPages(company, job) {
     } catch {
       return false;
     }
-  }).slice(0, 8);
+  }).map(item => {
+    try {
+      const host = new URL(item.url).hostname.replace(/^www\./, "");
+      return officialHost && (host === officialHost || host.endsWith(`.${officialHost}`))
+        ? { ...item, evidenceLevel: "企业官网" }
+        : item;
+    } catch {
+      return item;
+    }
+  }).slice(0, 10);
+}
+
+function openAlexAbstract(invertedIndex) {
+  if (!invertedIndex || typeof invertedIndex !== "object") return "";
+  const words = [];
+  Object.entries(invertedIndex).forEach(([word, positions]) => {
+    positions.forEach(position => {
+      words[position] = word;
+    });
+  });
+  return words.filter(Boolean).join(" ");
+}
+
+async function discoverOpenAlexIndustrySources(job) {
+  const terms = researchKeywords(job).slice(0, 5);
+  const query = [job.industry, job.title, ...terms].filter(Boolean).join(" ");
+  if (!query) return [];
+  try {
+    const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&filter=from_publication_date:2018-01-01&sort=relevance_score:desc&per-page=4`;
+    const response = await fetchWithLimit(url, "application/json");
+    const data = JSON.parse(response.text);
+    return (data.results || []).map(work => {
+      const abstract = openAlexAbstract(work.abstract_inverted_index);
+      const venue = work.primary_location?.source?.display_name || "";
+      const content = [
+        work.title,
+        abstract,
+        venue ? `发表来源：${venue}` : "",
+        work.publication_year ? `发表年份：${work.publication_year}` : ""
+      ].filter(Boolean).join("。");
+      return {
+        title: `${work.title} · OpenAlex`,
+        url: work.doi || work.id,
+        domain: work.doi ? "doi.org" : "openalex.org",
+        content: content.slice(0, 5000),
+        evidenceLevel: "学术技术资料",
+        sourceCategory: "行业参照"
+      };
+    }).filter(item => item.content.length >= 120);
+  } catch (error) {
+    console.warn("OpenAlex industry research failed:", error.message);
+    return [];
+  }
 }
 
 async function discoverIndustryPages(job) {
@@ -659,17 +717,20 @@ async function discoverIndustryPages(job) {
 
 async function collectCompanySources(company, job) {
   const structured = await discoverStructuredCompanySources(company);
-  const [companyPages, industryPages] = await Promise.all([
-    discoverCompanyPages(company, job),
-    discoverIndustryPages(job)
+  const [companyPages, industryPages, academicSources] = await Promise.all([
+    discoverCompanyPages(company, job, structured.officialHost),
+    discoverIndustryPages(job),
+    discoverOpenAlexIndustrySources(job)
   ]);
   const results = [...structured.pageCandidates, ...companyPages, ...industryPages];
-  const sources = structured.directSources.map((source, index) => ({ ...source, id: index + 1 }));
+  const sources = [...structured.directSources, ...academicSources].map((source, index) => ({ ...source, id: index + 1 }));
+  const seenFinalUrls = new Set(sources.map(source => source.url));
   for (const result of results) {
-    if (sources.length >= 10) break;
+    if (sources.length >= 12) break;
     const classification = classifyResearchSource(result.url, result.evidenceLevel);
     try {
       const page = await fetchWithLimit(result.url);
+      if (seenFinalUrls.has(page.url)) continue;
       if (!page.type.includes("html") && !page.type.includes("text")) continue;
       const title = decodeHtml(page.text.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || new URL(page.url).hostname)
         .replace(/\s+/g, " ").trim();
@@ -684,10 +745,12 @@ async function collectCompanySources(company, job) {
         evidenceLevel: classification.evidenceLevel,
         sourceCategory: classification.sourceCategory
       });
+      seenFinalUrls.add(page.url);
     } catch (error) {
       console.warn("Company source skipped:", error.message);
       const snippet = `${result.title}。${result.description}`.trim();
       if (snippet.length >= 60) {
+        if (seenFinalUrls.has(result.url)) continue;
         sources.push({
           id: sources.length + 1,
           title: result.title.slice(0, 160) || new URL(result.url).hostname,
@@ -697,6 +760,7 @@ async function collectCompanySources(company, job) {
           evidenceLevel: "搜索摘要",
           sourceCategory: classification.sourceCategory
         });
+        seenFinalUrls.add(result.url);
       }
     }
   }
