@@ -1371,8 +1371,6 @@ function deleteCandidate(candidateId, returnToImport = false) {
   const job = currentJob();
   const candidate = job.candidates.find(item => item.id === candidateId);
   if (!candidate) return;
-  const confirmed = window.confirm(`确认删除候选人“${candidate.name}”吗？\n\n删除后，该候选人的分析结果和人工标注也会一并移除。`);
-  if (!confirmed) return;
 
   job.candidates = job.candidates.filter(item => item.id !== candidate.id);
   const recordKey = `${job.id}:${candidate.id}`;
