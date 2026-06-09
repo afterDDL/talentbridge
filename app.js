@@ -856,6 +856,7 @@ function buildKnowledgeContext(job) {
     companyProfiles: (pack.companyProfiles || []).slice(-10).map(profile => ({
       company: profile.company,
       summary: profile.summary,
+      resolvedEntities: profile.resolvedEntities,
       products: profile.products,
       technologies: profile.technologies,
       industryPosition: profile.industryPosition,
@@ -1380,6 +1381,12 @@ function companyResearchCard(candidate) {
       <div><span>业务模式</span><strong>${escapeHtml(research.businessModel || "待研究")}</strong></div>
       <div><span>业务阶段</span><strong>${escapeHtml(research.operatingStage || "待研究")}</strong></div>
     </div>
+    <div class="resolved-entities">
+      <span>本次研究覆盖主体</span>
+      <div>${(research.resolvedEntities || [{ name: research.company || candidate.company, relationship: "简历所列主体", businessRole: "待核验" }]).map(entity => `
+        <p><strong>${escapeHtml(entity.name)}</strong><em>${escapeHtml(entity.relationship)}</em><small>${escapeHtml(entity.businessRole)}</small></p>
+      `).join("")}</div>
+    </div>
     <div class="research-tags">
       ${(research.products || []).slice(0, 3).map(item => `<span>${escapeHtml(item)}</span>`).join("")}
       ${(research.technologies || []).slice(0, 4).map(item => `<span>${escapeHtml(item)}</span>`).join("")}
@@ -1444,6 +1451,7 @@ function archiveCompanyResearch(candidate, job) {
     company: research.company || candidate.company,
     role: candidate.role,
     summary: research.summary,
+    resolvedEntities: research.resolvedEntities || [],
     industryPosition: research.industryPosition,
     valueChainRole: research.valueChainRole,
     businessModel: research.businessModel,
@@ -1470,7 +1478,7 @@ function archiveCompanyResearch(candidate, job) {
 }
 
 async function ensureCompanyResearch(candidate, force = false) {
-  if (!candidate || (!force && (candidate.companyResearch?.status === "loading" || candidate.companyResearch?.skill === "industry-research-v2"))) return;
+  if (!candidate || (!force && (candidate.companyResearch?.status === "loading" || candidate.companyResearch?.skill === "industry-research-v3"))) return;
   const job = currentJob();
   candidate.companyResearch = { status: "loading" };
   renderCandidateDetail(candidate.id);
@@ -1569,7 +1577,7 @@ function renderCandidateDetail(candidateId) {
         </div>
       </div>
     </section>`;
-  if (!c.companyResearch || (!["loading", "error"].includes(c.companyResearch.status) && c.companyResearch.skill !== "industry-research-v2")) {
+  if (!c.companyResearch || (!["loading", "error"].includes(c.companyResearch.status) && c.companyResearch.skill !== "industry-research-v3")) {
     void ensureCompanyResearch(c);
   }
 }
@@ -2188,6 +2196,7 @@ ${candidate.facts.map(item => `- ${item}`).join("\n")}
 
 ${companyResearch?.status === "researched" ? `- 与目标 JD 的背景适配：${companyResearch.fit}
 - 研究结论：${companyResearch.summary}
+- 研究覆盖主体：${(companyResearch.resolvedEntities || []).map(entity => `${entity.name}（${entity.relationship}：${entity.businessRole}）`).join("；") || candidate.company}
 - 主要产品 / 业务：${(companyResearch.products || []).join("、") || "公开信息不足"}
 - 主要技术方向：${(companyResearch.technologies || []).join("、") || "公开信息不足"}
 - 产业定位：${companyResearch.industryPosition || "公开信息不足"}
