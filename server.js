@@ -27,6 +27,9 @@ const RESEARCH_PAGE_BYTES = 600 * 1024;
 const RESEARCH_TIMEOUT_MS = 9000;
 const COMPANY_RESEARCH_TTL_MS = 24 * 60 * 60 * 1000;
 const companyResearchCache = new Map();
+const industryResearchPlanCache = new Map();
+const wikidataEntityCache = new Map();
+const wikidataRelationshipCache = new Map();
 const ALLOWED_RESUME_EXTENSIONS = new Set([".pdf", ".docx", ".txt", ".md"]);
 
 const MIME_TYPES = {
@@ -254,6 +257,24 @@ function sendJson(res, status, data) {
     "Cache-Control": "no-store"
   });
   res.end(JSON.stringify(data));
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchResearchResource(url, accept, attempts = 3) {
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await fetchWithLimit(url, accept);
+    } catch (error) {
+      lastError = error;
+      if (!/(?:429|500|502|503|504|fetch failed|aborted)/i.test(error.message) || attempt === attempts - 1) throw error;
+      await wait(500 * (2 ** attempt));
+    }
+  }
+  throw lastError;
 }
 
 function readJson(req, maxBytes = MAX_BODY_BYTES) {
@@ -542,9 +563,12 @@ function fallbackIndustryResearchPlan(job) {
 
 async function buildIndustryResearchPlan(job) {
   const fallback = fallbackIndustryResearchPlan(job);
+  const cacheKey = JSON.stringify([job.title, job.industry, job.jdText, job.model, job.adjacent]);
+  const cached = industryResearchPlanCache.get(cacheKey);
+  if (cached && Date.now() - cached.cachedAt < COMPANY_RESEARCH_TTL_MS) return cached.plan;
   if (!API_KEY) return fallback;
   try {
-    return await callAI({
+    const plan = await callAI({
       name: "industry_research_plan",
       schema: industryResearchPlanSchema,
       system: [
@@ -562,6 +586,8 @@ async function buildIndustryResearchPlan(job) {
         adjacent: job.adjacent
       })
     });
+    industryResearchPlanCache.set(cacheKey, { cachedAt: Date.now(), plan });
+    return plan;
   } catch (error) {
     console.warn("Industry research plan fallback:", error.message);
     return fallback;
@@ -610,24 +636,39 @@ function entityMatchesResearch(entity, job, researchPlan) {
 }
 
 async function fetchWikidataEntity(id) {
+  if (wikidataEntityCache.has(id)) return wikidataEntityCache.get(id);
   const url = `https://www.wikidata.org/wiki/Special:EntityData/${encodeURIComponent(id)}.json`;
-  const response = await fetchWithLimit(url, "application/json");
-  return JSON.parse(response.text).entities?.[id] || null;
+  const response = await fetchResearchResource(url, "application/json");
+  const entity = JSON.parse(response.text).entities?.[id] || null;
+  if (entity) wikidataEntityCache.set(id, entity);
+  return entity;
 }
 
 async function fetchWikidataEntities(ids) {
   const uniqueIds = [...new Set(ids)].filter(Boolean).slice(0, 50);
   if (!uniqueIds.length) return {};
+  const result = {};
+  const missingIds = [];
+  uniqueIds.forEach(id => {
+    if (wikidataEntityCache.has(id)) result[id] = wikidataEntityCache.get(id);
+    else missingIds.push(id);
+  });
+  if (!missingIds.length) return result;
   const url = [
     "https://www.wikidata.org/w/api.php?action=wbgetentities",
-    `ids=${encodeURIComponent(uniqueIds.join("|"))}`,
+    `ids=${encodeURIComponent(missingIds.join("|"))}`,
     "props=labels%7Cdescriptions%7Caliases%7Cclaims%7Csitelinks",
     "languages=zh%7Cen",
     "format=json",
     "origin=*"
   ].join("&");
-  const response = await fetchWithLimit(url, "application/json");
-  return JSON.parse(response.text).entities || {};
+  const response = await fetchResearchResource(url, "application/json");
+  const fetched = JSON.parse(response.text).entities || {};
+  Object.entries(fetched).forEach(([id, entity]) => {
+    wikidataEntityCache.set(id, entity);
+    result[id] = entity;
+  });
+  return result;
 }
 
 function wikidataLinkedEntityIds(entity) {
@@ -646,6 +687,7 @@ function wikidataLinkedEntityIds(entity) {
 }
 
 async function wikidataReverseLinkedEntityIds(entityId) {
+  if (wikidataRelationshipCache.has(entityId)) return wikidataRelationshipCache.get(entityId);
   const query = [
     "SELECT DISTINCT ?item ?relationship WHERE {",
     `  { ?item wdt:P749 wd:${entityId} . BIND("子公司" AS ?relationship) }`,
@@ -655,12 +697,14 @@ async function wikidataReverseLinkedEntityIds(entityId) {
   ].join("\n");
   try {
     const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(query)}&format=json`;
-    const response = await fetchWithLimit(url, "application/sparql-results+json,application/json");
+    const response = await fetchResearchResource(url, "application/sparql-results+json,application/json");
     const data = JSON.parse(response.text);
-    return (data.results?.bindings || []).map(binding => ({
+    const relationships = (data.results?.bindings || []).map(binding => ({
       id: binding.item?.value?.split("/").pop(),
       relationship: binding.relationship?.value || "关联主体"
     })).filter(item => item.id);
+    wikidataRelationshipCache.set(entityId, relationships);
+    return relationships;
   } catch (error) {
     console.warn("Wikidata reverse relationship lookup failed:", error.message);
     return [];
@@ -744,14 +788,12 @@ async function discoverStructuredCompanySources(company, job, researchPlan) {
   let officialHost = "";
   try {
     const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(company)}&language=zh&limit=3&format=json&origin=*`;
-    const searchResponse = await fetchWithLimit(searchUrl, "application/json");
+    const searchResponse = await fetchResearchResource(searchUrl, "application/json");
     const searchData = JSON.parse(searchResponse.text);
     const entityHit = searchData.search?.[0];
     if (!entityHit?.id) return { directSources, pageCandidates, entityNames, resolvedEntities };
 
-    const entityUrl = `https://www.wikidata.org/wiki/Special:EntityData/${encodeURIComponent(entityHit.id)}.json`;
-    const entityResponse = await fetchWithLimit(entityUrl, "application/json");
-    const entity = JSON.parse(entityResponse.text).entities?.[entityHit.id];
+    const entity = await fetchWikidataEntity(entityHit.id);
     if (!entity) return { directSources, pageCandidates, entityNames, resolvedEntities };
 
     const label = entity.labels?.zh?.value || entity.labels?.en?.value || entityHit.label || company;
@@ -813,7 +855,7 @@ async function discoverStructuredCompanySources(company, job, researchPlan) {
     if (wikiSite?.title) {
       const language = entity.sitelinks?.zhwiki ? "zh" : "en";
       const wikiApi = `https://${language}.wikipedia.org/w/api.php?action=query&prop=extracts%7Cinfo&explaintext=1&inprop=url&titles=${encodeURIComponent(wikiSite.title)}&format=json&origin=*`;
-      const wikiResponse = await fetchWithLimit(wikiApi, "application/json");
+      const wikiResponse = await fetchResearchResource(wikiApi, "application/json");
       const wikiData = JSON.parse(wikiResponse.text);
       const page = Object.values(wikiData.query?.pages || {})[0];
       if (page?.extract) {
