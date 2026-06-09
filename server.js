@@ -737,7 +737,8 @@ async function callDeepSeek({ name, schema, system, input }) {
   }
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new Error("DeepSeek 未返回可解析内容");
-  const result = JSON.parse(content);
+  const parsed = JSON.parse(content);
+  const result = parsed?.[name] && typeof parsed[name] === "object" ? parsed[name] : parsed;
   validateRequiredFields(result, schema);
   return result;
 }
