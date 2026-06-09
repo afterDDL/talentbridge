@@ -8,8 +8,13 @@ const { URL } = require("node:url");
 const PORT = Number(process.env.PORT || 4174);
 const HOST = process.env.HOST || "0.0.0.0";
 const ROOT = __dirname;
-const API_KEY = process.env.OPENAI_API_KEY || "";
-const MODEL = process.env.OPENAI_MODEL || "gpt-5.4-mini";
+const AI_PROVIDER = (process.env.AI_PROVIDER || "openai").toLowerCase();
+const API_KEY = AI_PROVIDER === "deepseek"
+  ? process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || ""
+  : process.env.OPENAI_API_KEY || "";
+const MODEL = AI_PROVIDER === "deepseek"
+  ? process.env.DEEPSEEK_MODEL || process.env.AI_MODEL || "deepseek-chat"
+  : process.env.OPENAI_MODEL || process.env.AI_MODEL || "gpt-5.4-mini";
 const MAX_BODY_BYTES = 1024 * 1024;
 const MAX_UPLOAD_BODY_BYTES = 30 * 1024 * 1024;
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -209,6 +214,55 @@ async function callOpenAI({ name, schema, system, input }) {
   return JSON.parse(extractOutputText(data));
 }
 
+function validateRequiredFields(value, schema, pathName = "result") {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${pathName} 必须是 JSON 对象`);
+  }
+  for (const key of schema.required || []) {
+    if (!(key in value)) throw new Error(`${pathName} 缺少字段 ${key}`);
+  }
+}
+
+async function callDeepSeek({ name, schema, system, input }) {
+  const schemaInstruction = [
+    "你必须只输出一个合法 JSON 对象，不要使用 Markdown 代码块。",
+    `输出对象名称：${name}`,
+    `必须严格符合以下 JSON Schema：${JSON.stringify(schema)}`
+  ].join("\n");
+  const response = await fetch("https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      messages: [
+        { role: "system", content: `${system}\n${schemaInstruction}` },
+        { role: "user", content: `${input}\n\n请以 JSON 格式返回结果。` }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+      stream: false
+    })
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || `DeepSeek API 返回 ${response.status}`);
+  }
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw new Error("DeepSeek 未返回可解析内容");
+  const result = JSON.parse(content);
+  validateRequiredFields(result, schema);
+  return result;
+}
+
+async function callAI(options) {
+  if (AI_PROVIDER === "deepseek") return callDeepSeek(options);
+  if (AI_PROVIDER === "openai") return callOpenAI(options);
+  throw new Error(`不支持的 AI_PROVIDER：${AI_PROVIDER}`);
+}
+
 function splitRequirements(text) {
   return text
     .split(/[\n；。]/)
@@ -284,7 +338,7 @@ function demoAnalyzeResume({ resume, job }) {
 
 async function analyzeJob(payload) {
   if (!API_KEY) return { result: demoAnalyzeJob(payload), mode: "demo" };
-  const result = await callOpenAI({
+  const result = await callAI({
     name: "job_capability_model",
     schema: jobSchema,
     system: [
@@ -296,12 +350,12 @@ async function analyzeJob(payload) {
     ].join("\n"),
     input: `岗位名称：${payload.title}\n行业：${payload.industry}\nJD：\n${payload.jd}\n招聘经理补充：\n${payload.note || "无"}`
   });
-  return { result, mode: "openai", model: MODEL };
+  return { result, mode: AI_PROVIDER, provider: AI_PROVIDER, model: MODEL };
 }
 
 async function analyzeResume(payload) {
   if (!API_KEY) return { result: demoAnalyzeResume(payload), mode: "demo" };
-  const result = await callOpenAI({
+  const result = await callAI({
     name: "candidate_transfer_analysis",
     schema: resumeSchema,
     system: [
@@ -318,14 +372,15 @@ async function analyzeResume(payload) {
     ].join("\n"),
     input: `目标岗位：\n${JSON.stringify(payload.job)}\n\n候选人简历：\n${payload.resume}`
   });
-  return { result, mode: "openai", model: MODEL };
+  return { result, mode: AI_PROVIDER, provider: AI_PROVIDER, model: MODEL };
 }
 
 async function handleApi(req, res, pathname) {
   if (req.method === "GET" && pathname === "/api/health") {
     return sendJson(res, 200, {
       ok: true,
-      mode: API_KEY ? "openai" : "demo",
+      mode: API_KEY ? AI_PROVIDER : "demo",
+      provider: API_KEY ? AI_PROVIDER : null,
       model: API_KEY ? MODEL : null
     });
   }

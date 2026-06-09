@@ -34,6 +34,17 @@ node server.js
 
 API Key 仅由服务端读取，不会返回或写入浏览器。
 
+启用 DeepSeek：
+
+```powershell
+$env:AI_PROVIDER="deepseek"
+$env:DEEPSEEK_API_KEY="你的 DeepSeek API Key"
+$env:DEEPSEEK_MODEL="deepseek-chat"
+node server.js
+```
+
+为兼容已有部署，当 `AI_PROVIDER=deepseek` 时，也可以从 `OPENAI_API_KEY` 读取 DeepSeek Key。
+
 ## 公网部署
 
 仓库包含 `Dockerfile`、`railway.json` 和 `render.yaml`，可直接部署到 Railway 或 Render。
@@ -46,6 +57,9 @@ API Key 仅由服务端读取，不会返回或写入浏览器。
 - `HOST=0.0.0.0`
 - `OPENAI_API_KEY`：可选；未配置时使用演示模式
 - `OPENAI_MODEL=gpt-5.4-mini`
+- `AI_PROVIDER=deepseek`：使用 DeepSeek 时设置
+- `DEEPSEEK_API_KEY`：DeepSeek 密钥；也兼容已有 `OPENAI_API_KEY`
+- `DEEPSEEK_MODEL=deepseek-chat`
 
 PDF 与 DOCX 解析需要：
 

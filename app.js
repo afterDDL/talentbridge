@@ -319,8 +319,10 @@ async function detectAiMode() {
     const response = await fetch("/api/health", { cache: "no-store" });
     if (!response.ok) throw new Error("unavailable");
     const data = await response.json();
-    badge.className = `ai-mode ${data.mode === "openai" ? "live" : "demo"}`;
-    badge.innerHTML = `<i></i><span>${data.mode === "openai" ? `真实 AI · ${escapeHtml(data.model)}` : "AI 演示模式"}</span>`;
+    const live = data.mode !== "demo";
+    const providerName = data.provider === "deepseek" ? "DeepSeek" : data.provider === "openai" ? "OpenAI" : "AI";
+    badge.className = `ai-mode ${live ? "live" : "demo"}`;
+    badge.innerHTML = `<i></i><span>${live ? `${providerName} · ${escapeHtml(data.model)}` : "AI 演示模式"}</span>`;
   } catch {
     badge.className = "ai-mode demo";
     badge.innerHTML = "<i></i><span>静态原型模式</span>";
@@ -1391,8 +1393,8 @@ async function completeImport() {
         custom: true
       });
       toast(
-        data.mode === "openai" ? "真实 AI 分析完成" : "演示分析完成",
-        data.mode === "openai" ? `模型：${data.model}` : "配置 OPENAI_API_KEY 后可切换到真实模型"
+        data.mode !== "demo" ? "真实 AI 分析完成" : "演示分析完成",
+        data.mode !== "demo" ? `模型：${data.model}` : "配置 AI 服务密钥后可切换到真实模型"
       );
     } catch (error) {
       const candidate = buildCandidateFromText(text, job);
@@ -1911,7 +1913,7 @@ document.addEventListener("submit", async event => {
   saveState();
   renderCalibration();
   toast(
-    mode === "openai" ? "真实 AI 岗位模型已生成" : "岗位模型已生成",
+    mode !== "demo" ? "真实 AI 岗位模型已生成" : "岗位模型已生成",
     "请先校准能力重要度和可接受的相邻经历"
   );
 });
