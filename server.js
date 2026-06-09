@@ -138,7 +138,7 @@ const companyResearchSchema = {
   required: [
     "status", "summary", "industryPosition", "valueChainRole", "businessModel",
     "customerMarkets", "operatingStage", "products", "technologies", "technologyEvidence",
-    "fit", "fitReasons", "jdMapping", "hrInsights", "gaps", "sourceIds"
+    "industryBenchmarks", "sourceAssessment", "fit", "fitReasons", "jdMapping", "hrInsights", "gaps", "sourceIds"
   ],
   properties: {
     status: { type: "string", enum: ["researched", "insufficient"] },
@@ -161,8 +161,35 @@ const companyResearchSchema = {
         properties: {
           technology: { type: "string" },
           evidence: { type: "string" },
-          sourceIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 8 } }
+          sourceIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 12 } }
         }
+      }
+    },
+    industryBenchmarks: {
+      type: "array",
+      minItems: 1,
+      maxItems: 5,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["topic", "benchmark", "companyComparison", "sourceIds"],
+        properties: {
+          topic: { type: "string" },
+          benchmark: { type: "string" },
+          companyComparison: { type: "string" },
+          sourceIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 12 } }
+        }
+      }
+    },
+    sourceAssessment: {
+      type: "object",
+      additionalProperties: false,
+      required: ["primarySources", "independentSources", "industrySources", "confidence"],
+      properties: {
+        primarySources: { type: "integer", minimum: 0, maximum: 12 },
+        independentSources: { type: "integer", minimum: 0, maximum: 12 },
+        industrySources: { type: "integer", minimum: 0, maximum: 12 },
+        confidence: { type: "string", enum: ["高", "中", "低"] }
       }
     },
     fit: { type: "string", enum: ["高", "中", "低", "信息不足"] },
@@ -180,13 +207,13 @@ const companyResearchSchema = {
           companyEvidence: { type: "string" },
           relevance: { type: "string", enum: ["直接相关", "相邻相关", "仅行业相关", "未证实"] },
           reason: { type: "string" },
-          sourceIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 8 } }
+          sourceIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "integer", minimum: 1, maximum: 12 } }
         }
       }
     },
     hrInsights: { type: "array", minItems: 1, maxItems: 4, items: { type: "string" } },
     gaps: { type: "array", minItems: 1, maxItems: 4, items: { type: "string" } },
-    sourceIds: { type: "array", minItems: 1, maxItems: 5, items: { type: "integer", minimum: 1, maximum: 8 } }
+    sourceIds: { type: "array", minItems: 1, maxItems: 8, items: { type: "integer", minimum: 1, maximum: 12 } }
   }
 };
 
@@ -487,6 +514,48 @@ function searchResultMatchesCompany(result, company) {
   return !signals.length || signals.some(signal => haystack.includes(signal.toLowerCase()));
 }
 
+function classifyResearchSource(url, requestedLevel = "") {
+  const host = new URL(url).hostname.toLowerCase();
+  if (requestedLevel === "企业官网") return { evidenceLevel: "企业官网", sourceCategory: "公司一手资料" };
+  if (requestedLevel === "行业研究") return { evidenceLevel: "行业资料", sourceCategory: "行业参照" };
+  if (/(?:sec\.gov|cninfo\.com\.cn|sse\.com\.cn|szse\.cn|hkexnews\.hk|twse\.com\.tw|mops\.twse\.com\.tw)$/.test(host)) {
+    return { evidenceLevel: "监管披露", sourceCategory: "公司一手资料" };
+  }
+  if (/(?:ieee\.org|semiengineering\.com|semi\.org|imec-int\.com|nature\.com|sciencedirect\.com|springer\.com)$/.test(host)) {
+    return { evidenceLevel: "专业技术资料", sourceCategory: "行业参照" };
+  }
+  if (/(?:reuters\.com|bloomberg\.com|ft\.com|wsj\.com|nikkei\.com|caixin\.com)$/.test(host)) {
+    return { evidenceLevel: "独立媒体", sourceCategory: "外部核验" };
+  }
+  return { evidenceLevel: "网页正文", sourceCategory: "外部核验" };
+}
+
+async function searchResearchWeb(queries) {
+  const discoveredGroups = await Promise.all(queries.map(async query => {
+    const results = [];
+    try {
+      const response = await fetchWithLimit(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, "text/html");
+      results.push(...parseDuckDuckGoHtml(response.text));
+    } catch (error) {
+      console.warn("DuckDuckGo research search failed:", error.message);
+    }
+    if (!results.length) {
+      try {
+        const response = await fetchWithLimit(`https://www.bing.com/search?q=${encodeURIComponent(query)}&format=rss`, "application/rss+xml,application/xml,text/xml");
+        results.push(...parseBingRss(response.text));
+      } catch (error) {
+        console.warn("Bing research search failed:", error.message);
+      }
+    }
+    return results;
+  }));
+  const unique = new Map();
+  discoveredGroups.flat().forEach(item => {
+    if (!unique.has(item.url)) unique.set(item.url, item);
+  });
+  return [...unique.values()];
+}
+
 async function discoverStructuredCompanySources(company) {
   const directSources = [];
   const pageCandidates = [];
@@ -510,7 +579,8 @@ async function discoverStructuredCompanySources(company) {
       url: `https://www.wikidata.org/wiki/${entityHit.id}`,
       domain: "wikidata.org",
       content: `企业名称：${label}。企业描述：${description || "未提供"}。别名：${aliases.join("、") || "未提供"}。`,
-      evidenceLevel: "结构化知识"
+      evidenceLevel: "结构化知识",
+      sourceCategory: "实体识别"
     });
 
     const officialUrl = entity.claims?.P856?.[0]?.mainsnak?.datavalue?.value;
@@ -536,7 +606,8 @@ async function discoverStructuredCompanySources(company) {
           url: page.fullurl || `https://${language}.wikipedia.org/wiki/${encodeURIComponent(wikiSite.title.replace(/ /g, "_"))}`,
           domain: `${language}.wikipedia.org`,
           content: page.extract.slice(0, 12000),
-          evidenceLevel: "百科正文"
+          evidenceLevel: "百科正文",
+          sourceCategory: "外部核验"
         });
       }
     }
@@ -554,31 +625,9 @@ async function discoverCompanyPages(company, job) {
     `"${company}" 年报 技术 平台 制造 量产`,
     `"${company}" ${keywordText}`
   ];
-  const discoveredGroups = await Promise.all(queries.map(async query => {
-    const results = [];
-    try {
-      const response = await fetchWithLimit(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, "text/html");
-      results.push(...parseDuckDuckGoHtml(response.text));
-    } catch (error) {
-      console.warn("DuckDuckGo company search failed:", error.message);
-    }
-    if (!results.length) {
-      try {
-        const response = await fetchWithLimit(`https://www.bing.com/search?q=${encodeURIComponent(query)}&format=rss`, "application/rss+xml,application/xml,text/xml");
-        results.push(...parseBingRss(response.text));
-      } catch (error) {
-        console.warn("Bing company search failed:", error.message);
-      }
-    }
-    return results;
-  }));
-  const discovered = discoveredGroups.flat();
+  const discovered = await searchResearchWeb(queries);
   const blockedHosts = /(?:bing|baidu|google|duckduckgo|facebook|linkedin|zhihu|weibo|bilibili)\./i;
-  const unique = new Map();
-  discovered.forEach(item => {
-    if (!unique.has(item.url)) unique.set(item.url, item);
-  });
-  return [...unique.values()].filter(item => {
+  return discovered.filter(item => {
     try {
       const url = new URL(item.url);
       return !blockedHosts.test(url.hostname) && searchResultMatchesCompany(item, company);
@@ -588,12 +637,37 @@ async function discoverCompanyPages(company, job) {
   }).slice(0, 8);
 }
 
+async function discoverIndustryPages(job) {
+  const terms = researchKeywords(job);
+  const industry = String(job.industry || job.title || "").trim();
+  const topic = terms.slice(0, 4).join(" ");
+  const queries = [
+    `"${industry}" 产业链 市场格局 竞争格局`,
+    `"${industry}" 技术路线 量产 工艺 趋势`,
+    `"${topic}" 行业报告 技术 对比`,
+    `"${job.title || industry}" 上下游 客户 应用`
+  ];
+  const blockedHosts = /(?:bing|baidu|google|duckduckgo|facebook|linkedin|zhihu|weibo|bilibili)\./i;
+  return (await searchResearchWeb(queries)).filter(item => {
+    try {
+      return !blockedHosts.test(new URL(item.url).hostname);
+    } catch {
+      return false;
+    }
+  }).map(item => ({ ...item, evidenceLevel: "行业研究" })).slice(0, 8);
+}
+
 async function collectCompanySources(company, job) {
   const structured = await discoverStructuredCompanySources(company);
-  const results = [...structured.pageCandidates, ...(await discoverCompanyPages(company, job))];
+  const [companyPages, industryPages] = await Promise.all([
+    discoverCompanyPages(company, job),
+    discoverIndustryPages(job)
+  ]);
+  const results = [...structured.pageCandidates, ...companyPages, ...industryPages];
   const sources = structured.directSources.map((source, index) => ({ ...source, id: index + 1 }));
   for (const result of results) {
-    if (sources.length >= 5) break;
+    if (sources.length >= 10) break;
+    const classification = classifyResearchSource(result.url, result.evidenceLevel);
     try {
       const page = await fetchWithLimit(result.url);
       if (!page.type.includes("html") && !page.type.includes("text")) continue;
@@ -607,7 +681,8 @@ async function collectCompanySources(company, job) {
         url: page.url,
         domain: new URL(page.url).hostname,
         content: content.slice(0, 5000),
-        evidenceLevel: result.evidenceLevel === "企业官网" ? "企业官网" : "网页正文"
+        evidenceLevel: classification.evidenceLevel,
+        sourceCategory: classification.sourceCategory
       });
     } catch (error) {
       console.warn("Company source skipped:", error.message);
@@ -619,7 +694,8 @@ async function collectCompanySources(company, job) {
           url: result.url,
           domain: new URL(result.url).hostname,
           content: snippet.slice(0, 1000),
-          evidenceLevel: "搜索摘要"
+          evidenceLevel: "搜索摘要",
+          sourceCategory: classification.sourceCategory
         });
       }
     }
@@ -641,6 +717,18 @@ function insufficientCompanyResearch(company, reason, sources = []) {
     products: ["公开信息不足"],
     technologies: ["公开信息不足"],
     technologyEvidence: [{ technology: "公开信息不足", evidence: reason, sourceIds: sources[0]?.id ? [sources[0].id] : [1] }],
+    industryBenchmarks: [{
+      topic: "行业参照",
+      benchmark: "公开信息不足",
+      companyComparison: "暂不能比较",
+      sourceIds: sources[0]?.id ? [sources[0].id] : [1]
+    }],
+    sourceAssessment: {
+      primarySources: sources.filter(source => source.sourceCategory === "公司一手资料").length,
+      independentSources: sources.filter(source => source.sourceCategory === "外部核验").length,
+      industrySources: sources.filter(source => source.sourceCategory === "行业参照").length,
+      confidence: "低"
+    },
     fit: "信息不足",
     fitReasons: ["无法基于可靠公开信息判断原司背景与目标岗位的适配度"],
     jdMapping: [{
@@ -652,7 +740,7 @@ function insufficientCompanyResearch(company, reason, sources = []) {
     }],
     hrInsights: ["先确认企业具体产品线、技术平台及候选人所在业务单元"],
     gaps: ["建议 HR 补充公司官网、产品线或技术平台信息"],
-    sources: sources.map(({ id, title, url, domain, evidenceLevel }) => ({ id, title, url, domain, evidenceLevel })),
+    sources: sources.map(({ id, title, url, domain, evidenceLevel, sourceCategory }) => ({ id, title, url, domain, evidenceLevel, sourceCategory })),
     researchedAt: new Date().toISOString()
   };
 }
@@ -711,6 +799,7 @@ async function researchCompany(payload) {
     `标题：${source.title}`,
     `域名：${source.domain}`,
     `证据类型：${source.evidenceLevel}`,
+    `来源角色：${source.sourceCategory}`,
     `正文摘录：${source.content}`
   ].join("\n")).join("\n\n");
   const result = await callAI({
@@ -723,12 +812,26 @@ async function researchCompany(payload) {
   const selectedIds = new Set(sanitizedResult.sourceIds);
   const selectedSources = sources
     .filter(source => selectedIds.has(source.id))
-    .map(({ id, title, url, domain, evidenceLevel }) => ({ id, title, url, domain, evidenceLevel }));
+    .map(({ id, title, url, domain, evidenceLevel, sourceCategory }) => ({ id, title, url, domain, evidenceLevel, sourceCategory }));
+  const finalSources = selectedSources.length
+    ? selectedSources
+    : sources.slice(0, 6).map(({ id, title, url, domain, evidenceLevel, sourceCategory }) => ({ id, title, url, domain, evidenceLevel, sourceCategory }));
+  const sourceCounts = {
+    primarySources: finalSources.filter(source => source.sourceCategory === "公司一手资料").length,
+    independentSources: finalSources.filter(source => ["外部核验", "实体识别"].includes(source.sourceCategory)).length,
+    industrySources: finalSources.filter(source => source.sourceCategory === "行业参照").length
+  };
   const finalResult = {
     ...sanitizedResult,
     company,
     skill: industryResearchSkill.VERSION,
-    sources: selectedSources.length ? selectedSources : sources.slice(0, 3).map(({ id, title, url, domain, evidenceLevel }) => ({ id, title, url, domain, evidenceLevel })),
+    sourceAssessment: {
+      ...sourceCounts,
+      confidence: sourceCounts.primarySources > 0 && sourceCounts.independentSources > 0 && sourceCounts.industrySources > 0
+        ? "高"
+        : sourceCounts.independentSources > 0 && sourceCounts.industrySources > 0 ? "中" : "低"
+    },
+    sources: finalSources,
     researchedAt: new Date().toISOString()
   };
   delete finalResult.sourceIds;

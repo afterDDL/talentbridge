@@ -797,6 +797,7 @@ function companyProfileSection(pack) {
               <span><small>业务模式</small>${escapeHtml(profile.businessModel || "待研究")}</span>
             </div>
             <div class="research-tags">${[...(profile.products || []), ...(profile.technologies || [])].slice(0, 6).map(item => `<span>${escapeHtml(item)}</span>`).join("")}</div>
+            ${(profile.industryBenchmarks || []).length ? `<div class="company-profile-insight"><span>行业参照</span>${profile.industryBenchmarks.slice(0, 2).map(item => `<p>${escapeHtml(item.topic)}：${escapeHtml(item.companyComparison)}</p>`).join("")}</div>` : ""}
             <div class="company-profile-insight"><span>HR 学习重点</span>${(profile.hrInsights || profile.fitReasons || []).slice(0, 2).map(item => `<p>+ ${escapeHtml(item)}</p>`).join("")}${(profile.gaps || []).slice(0, 1).map(item => `<p>· ${escapeHtml(item)}</p>`).join("")}</div>
             <footer>
               <span>更新于 ${profile.researchedAt ? new Date(profile.researchedAt).toLocaleDateString("zh-CN") : "刚刚"}</span>
@@ -862,6 +863,8 @@ function buildKnowledgeContext(job) {
       businessModel: profile.businessModel,
       customerMarkets: profile.customerMarkets,
       operatingStage: profile.operatingStage,
+      industryBenchmarks: profile.industryBenchmarks,
+      sourceAssessment: profile.sourceAssessment,
       fit: profile.fit,
       researchedAt: profile.researchedAt
     }))
@@ -1389,6 +1392,12 @@ function companyResearchCard(candidate) {
           <p><strong>${escapeHtml(item.requirement)}</strong>${escapeHtml(item.companyEvidence)}</p>
         </div>`).join("") || `<p>公开信息不足，暂不能建立逐项映射。</p>`}
     </div>
+    <div class="industry-benchmark">
+      <span>行业参照与公司位置</span>
+      ${(research.industryBenchmarks || []).slice(0, 3).map(item => `
+        <div><strong>${escapeHtml(item.topic)}</strong><p>${escapeHtml(item.benchmark)}</p><small>${escapeHtml(item.companyComparison)}</small></div>
+      `).join("") || `<p>暂未找到可用的行业参照资料。</p>`}
+    </div>
     <div class="research-fit-grid">
       <div><span>HR 应理解的业务背景</span>${(research.hrInsights || research.fitReasons || []).slice(0, 3).map(item => `<p>+ ${escapeHtml(item)}</p>`).join("")}</div>
       <div><span>公开信息仍未证明</span>${(research.gaps || []).slice(0, 3).map(item => `<p>· ${escapeHtml(item)}</p>`).join("")}</div>
@@ -1399,8 +1408,8 @@ function companyResearchCard(candidate) {
       ${(research.technologyEvidence || []).slice(0, 5).map(item => `<p><strong>${escapeHtml(item.technology)}：</strong>${escapeHtml(item.evidence)}</p>`).join("")}
     </details>
     <div class="research-sources">
-      <span>公开来源 · ${research.researchedAt ? new Date(research.researchedAt).toLocaleDateString("zh-CN") : "刚刚"}</span>
-      <div>${(research.sources || []).map(source => `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(source.evidenceLevel || "公开网页")}">${escapeHtml(source.title || source.domain)}${source.evidenceLevel === "搜索摘要" ? " · 摘要" : ""}</a>`).join("") || `<em>未找到可引用来源</em>`}</div>
+      <span>证据置信度 ${escapeHtml(research.sourceAssessment?.confidence || "低")} · ${research.researchedAt ? new Date(research.researchedAt).toLocaleDateString("zh-CN") : "刚刚"}</span>
+      <div>${(research.sources || []).map(source => `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(source.evidenceLevel || "公开网页")}">${escapeHtml(source.sourceCategory || source.evidenceLevel || "公开来源")} · ${escapeHtml(source.title || source.domain)}</a>`).join("") || `<em>未找到可引用来源</em>`}</div>
     </div>
     <p class="research-disclaimer">企业背景适配只说明候选人可能接触过相近环境，不代表其本人掌握对应技术。</p>`;
 }
@@ -1443,6 +1452,8 @@ function archiveCompanyResearch(candidate, job) {
     products: research.products || [],
     technologies: research.technologies || [],
     technologyEvidence: research.technologyEvidence || [],
+    industryBenchmarks: research.industryBenchmarks || [],
+    sourceAssessment: research.sourceAssessment || {},
     fit: research.fit,
     fitReasons: research.fitReasons || [],
     jdMapping: research.jdMapping || [],
@@ -1459,7 +1470,7 @@ function archiveCompanyResearch(candidate, job) {
 }
 
 async function ensureCompanyResearch(candidate, force = false) {
-  if (!candidate || (!force && (candidate.companyResearch?.status === "loading" || candidate.companyResearch?.skill === "industry-research-v1"))) return;
+  if (!candidate || (!force && (candidate.companyResearch?.status === "loading" || candidate.companyResearch?.skill === "industry-research-v2"))) return;
   const job = currentJob();
   candidate.companyResearch = { status: "loading" };
   renderCandidateDetail(candidate.id);
@@ -1558,7 +1569,7 @@ function renderCandidateDetail(candidateId) {
         </div>
       </div>
     </section>`;
-  if (!c.companyResearch || (!["loading", "error"].includes(c.companyResearch.status) && c.companyResearch.skill !== "industry-research-v1")) {
+  if (!c.companyResearch || (!["loading", "error"].includes(c.companyResearch.status) && c.companyResearch.skill !== "industry-research-v2")) {
     void ensureCompanyResearch(c);
   }
 }
@@ -2184,9 +2195,13 @@ ${companyResearch?.status === "researched" ? `- 与目标 JD 的背景适配：$
 - 业务模式：${companyResearch.businessModel || "公开信息不足"}
 - 客户 / 下游应用：${(companyResearch.customerMarkets || []).join("、") || "公开信息不足"}
 - 业务 / 制造阶段：${companyResearch.operatingStage || "公开信息不足"}
+- 来源交叉验证置信度：${companyResearch.sourceAssessment?.confidence || "低"}
 
 企业背景与 JD 逐项映射：
 ${(companyResearch.jdMapping || []).map(item => `- ${item.requirement}｜${item.relevance}｜${item.companyEvidence}｜${item.reason}`).join("\n") || "- 暂无充分公开证据"}
+
+行业参照与公司位置：
+${(companyResearch.industryBenchmarks || []).map(item => `- ${item.topic}｜行业基准：${item.benchmark}｜公司位置：${item.companyComparison}`).join("\n") || "- 暂无行业参照"}
 
 可能相关：
 ${(companyResearch.fitReasons || []).map(item => `- ${item}`).join("\n") || "- 暂无充分公开证据"}
