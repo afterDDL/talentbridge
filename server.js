@@ -628,7 +628,7 @@ function parseDuckDuckGoHtml(html) {
 
 function researchKeywords(job) {
   const modelTerms = (job.model || []).map(item => Array.isArray(item) ? item[0] : item.name);
-  return [...new Set([job.title, ...(job.adjacent || []), ...modelTerms])]
+  return [...new Set([job.title, job.businessContext, ...(job.adjacent || []), ...modelTerms])]
     .flatMap(item => String(item || "").split(/[、/，,\s]+/))
     .filter(item => item.length >= 2)
     .slice(0, 8);
@@ -703,7 +703,7 @@ function fallbackIndustryResearchPlan(job) {
 
 async function buildIndustryResearchPlan(job) {
   const fallback = fallbackIndustryResearchPlan(job);
-  const cacheKey = JSON.stringify([job.title, job.industry, job.jdText, job.model, job.adjacent]);
+  const cacheKey = JSON.stringify([job.title, job.industry, job.jdText, job.businessContext, job.model, job.adjacent]);
   const cached = industryResearchPlanCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < COMPANY_RESEARCH_TTL_MS) return cached.plan;
   if (!API_KEY) return fallback;
@@ -712,8 +712,9 @@ async function buildIndustryResearchPlan(job) {
       name: "industry_research_plan",
       schema: industryResearchPlanSchema,
       system: [
-        "你是跨行业研究规划器，只根据目标 JD 设计检索计划，不研究任何具体公司。",
+        "你是跨行业研究规划器，根据目标 JD、能力模型和 HR 的业务理解设计检索计划，不研究任何具体公司。",
         "识别该岗位所属行业、核心产品/技术/业务术语、产业链角色和可能出现的集团/子公司业务描述。",
+        "HR 的业务理解可能通俗、碎片或笼统，可用于补充产品与技术检索方向，但不是公司事实。",
         "生成适合公开网页与学术数据库检索的中英文关键词；不要局限于输入中的原词，要补充同义词、上位词和专业术语。",
         "该方法必须适用于制造、互联网、金融、医药、消费、能源、专业服务等不同行业。",
         "不输出公司事实，不判断候选人，不使用具体公司名称。"
@@ -722,6 +723,7 @@ async function buildIndustryResearchPlan(job) {
         title: job.title,
         industry: job.industry,
         jdText: job.jdText,
+        businessContext: job.businessContext,
         model: job.model,
         adjacent: job.adjacent
       })
@@ -1572,8 +1574,8 @@ function splitRequirements(text) {
     .filter(item => item.length >= 6);
 }
 
-function demoAnalyzeJob({ title, jd, note }) {
-  const clauses = splitRequirements(`${jd}\n${note || ""}`);
+function demoAnalyzeJob({ title, jd, businessContext, note }) {
+  const clauses = splitRequirements(`${businessContext || ""}\n${jd}\n${note || ""}`);
   const defaults = ["核心业务任务", "专业问题解决", "跨团队协同", "结果交付", "行业知识"];
   const names = [...clauses.slice(0, 6)];
   while (names.length < 5) names.push(defaults[names.length]);
@@ -1581,7 +1583,7 @@ function demoAnalyzeJob({ title, jd, note }) {
     summary: clauses[0] || `围绕${title}的核心业务目标开展工作，并对关键结果负责。`,
     capabilities: names.map((name, index) => ({
       name: name.slice(0, 24),
-      description: index < 3 ? "从 JD 中识别的核心工作要求" : "建议由招聘经理进一步校准",
+      description: index < 3 ? "从 JD 与 HR 业务理解中识别的核心要求" : "建议由招聘经理进一步校准",
       priority: index < 3 ? "必须" : "重要"
     })),
     adjacent: ["相邻行业经验", "相似业务场景", "可迁移项目经历"]
@@ -1670,11 +1672,13 @@ async function analyzeJob(payload) {
     system: [
       "你是谨慎的中高端招聘研究助手。",
       "将 JD 拆解为跨行业可复用的能力模型，不要只复述关键词。",
+      "HR 的业务理解可能通俗、碎片或笼统。用它识别产品形态、目标用户、技术路线、关键业务任务和成功标准，再与 JD 交叉校准。",
+      "业务理解是分析视角，不是候选人事实；其中模糊、推测或与 JD 冲突的内容不得直接设为硬性淘汰条件，应转化为待校准能力或面试验证方向。",
       "只分析岗位相关要求，忽略年龄、性别、婚育、民族等敏感属性。",
       "模糊要求不得设为硬性淘汰条件。相邻经历必须体现任务或能力迁移关系。",
       "用简洁中文输出。"
     ].join("\n"),
-    input: `岗位名称：${payload.title}\n行业：${payload.industry}\nJD：\n${payload.jd}\n招聘经理补充：\n${payload.note || "无"}`
+    input: `岗位名称：${payload.title}\n行业：${payload.industry}\nJD：\n${payload.jd}\nHR 对业务的理解：\n${payload.businessContext || "无"}\n招聘经理补充：\n${payload.note || "无"}`
   });
   return { result, mode: AI_PROVIDER, provider: AI_PROVIDER, model: MODEL };
 }
@@ -1726,6 +1730,8 @@ async function analyzeResume(payload) {
       "recovered 仅在 ATS 未命中但存在可信迁移路径时为 true。",
       "coverage 是能力证据覆盖程度，不是录用概率。",
       "岗位知识包中的正向迁移规则只用于支持推断，反向风险规则用于检查误判，均不能替代简历事实。",
+      "目标岗位中的 businessContext 是 HR 对产品、技术或业务目标的通俗理解。将它作为比较候选人经历的分析角度，重点识别其是否接触过相似产品形态、技术机理、用户场景或交付目标。",
+      "businessContext 不能替代 JD，也不能证明候选人具备某项能力。简历没有对应证据时必须写未证实，并生成有针对性的追问。",
       "用简洁中文输出。"
     ].join("\n"),
     input: `目标岗位：\n${JSON.stringify(payload.job)}\n\n候选人简历：\n${payload.resume}`

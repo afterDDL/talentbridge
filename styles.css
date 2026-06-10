@@ -541,6 +541,16 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   outline: none; background: white; color: var(--text); line-height: 1.6; resize: vertical;
 }
 .field input:focus, .field textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(51,112,255,.12); }
+.field > small { margin-top: -3px; color: var(--text-3); font-size: 11px; line-height: 1.5; }
+.business-context-field { padding: 13px 14px; border: 1px solid #ddd5f6; border-radius: 7px; background: #faf8ff; }
+.business-context-box { margin-top: 14px; padding: 13px 14px; border: 1px solid #ddd5f6; border-radius: 7px; background: #faf8ff; }
+.business-context-box span { display: block; color: var(--purple); font-size: 11px; font-weight: 600; }
+.business-context-box p { margin: 6px 0 0; color: var(--text-2); font-size: 12px; line-height: 1.65; }
+.job-input-editors { display: grid; gap: 14px; }
+.job-input-editors label, .job-input-editors label > span, .job-input-editors label > small { display: block; }
+.job-input-editors label > span { margin-bottom: 7px; font-size: 12px; font-weight: 600; }
+.job-input-editors label > small { margin-top: 6px; color: var(--text-3); font-size: 10px; }
+.business-context-editor { min-height: 120px; background: #faf8ff; }
 .privacy-tip { display: flex; gap: 11px; padding: 13px 14px; border: 1px solid #ded5f6; border-radius: 7px; background: #faf8ff; }
 .privacy-tip > span { flex: 0 0 auto; height: 24px; padding: 4px 7px; border-radius: 4px; background: var(--purple-soft); color: var(--purple); font-size: 11px; font-weight: 700; }
 .privacy-tip p { margin: 0; color: var(--text-2); font-size: 12px; line-height: 1.6; }

@@ -4,6 +4,7 @@ const jobs = {
     title: "3D 先进封装工艺工程师",
     industry: "半导体 · 先进封装",
     summary: "负责 3D 堆叠相关工艺开发、量产导入与良率提升，协同解决互连、翘曲及可靠性问题。",
+    businessContext: "我们要建设可量产的 3D 堆叠先进封装能力，重点解决高密度互连、翘曲、热应力和良率爬坡问题。",
     jd: "<strong>岗位职责：</strong><br>1. 负责 3D 先进封装关键工艺开发与量产导入；<br>2. 推动晶圆减薄、键合、TSV 等制程优化；<br>3. 分析并解决翘曲、热应力、互连及可靠性问题；<br>4. 联动设备、材料和产品团队持续改善良率。<br><br><strong>任职要求：</strong><br>5 年以上先进封装工艺经验，有 3D 堆叠或相邻封装平台量产经验优先。",
     model: [
       ["先进封装工艺开发", "从方案验证到量产导入", "必须"],
@@ -716,7 +717,8 @@ function renderCreateProject() {
               <label class="field"><span>岗位名称 *</span><input id="newJobTitle" required placeholder="例如：新能源汽车供应链总监"></label>
               <label class="field"><span>行业 / 业务方向 *</span><input id="newJobIndustry" required placeholder="例如：新能源汽车 · 供应链"></label>
             </div>
-            <label class="field"><span>岗位 JD *</span><textarea id="newJobJd" required rows="12" placeholder="粘贴岗位职责、任职要求，以及招聘经理的补充说明……"></textarea></label>
+            <label class="field"><span>岗位 JD *</span><textarea id="newJobJd" required rows="12" placeholder="粘贴岗位职责和任职要求……"></textarea></label>
+            <label class="field business-context-field"><span>你对这项业务的理解</span><textarea id="newJobBusinessContext" rows="5" placeholder="可以通俗、碎片或笼统一点。例如：我们要做的是 NPU 架构的边缘加速推理芯片。"></textarea><small>AI 会把它作为分析视角，理解真正的产品方向和业务任务；不会直接把模糊表述当成淘汰条件。</small></label>
             <label class="field"><span>招聘经理补充</span><textarea id="newJobNote" rows="4" placeholder="例如：必须有复杂供应商管理经验；消费电子背景也可以接受。"></textarea></label>
             <div class="privacy-tip"><span>AI</span><p><strong>生成逻辑</strong><br>当前 Demo 会根据 JD 中的任务表达生成可编辑能力模型，不会把年龄、性别等敏感属性纳入判断。</p></div>
           </div>
@@ -878,9 +880,9 @@ function buildKnowledgeContext(job) {
   };
 }
 
-function buildJobFromForm(title, industry, jdText, note) {
+function buildJobFromForm(title, industry, jdText, businessContext, note) {
   const id = `job-${Date.now()}`;
-  const clauses = jdText
+  const clauses = `${businessContext || ""}\n${jdText}`
     .split(/[\n；。]/)
     .map(item => item.replace(/^\s*[\d一二三四五六七八九十]+[.、)]?\s*/, "").trim())
     .filter(item => item.length >= 6);
@@ -896,8 +898,9 @@ function buildJobFromForm(title, industry, jdText, note) {
     summary: clauses[0] || `围绕${title}的核心业务目标开展工作，并对关键结果负责。`,
     jdText,
     jd: formatJd(jdText, note),
+    businessContext,
     note,
-    model: modelNames.map((name, index) => [name.slice(0, 22), index < 3 ? "从 JD 中识别的核心要求" : "建议由招聘经理进一步校准", index < 3 ? "必须" : "重要"]),
+    model: modelNames.map((name, index) => [name.slice(0, 22), index < 3 ? "从 JD 与 HR 业务理解中识别的核心要求" : "建议由招聘经理进一步校准", index < 3 ? "必须" : "重要"]),
     adjacent: ["相邻行业经验", "相似业务场景", "可迁移项目经历"],
     knowledgePackId: null,
     candidates: []
@@ -928,8 +931,12 @@ function renderRequirement() {
             </div>
             <div class="card-body">
               <div class="jd-box">${job.jd}</div>
+              <div class="business-context-box">
+                <span>HR 对业务的理解</span>
+                <p>${escapeHtml(job.businessContext || "暂未补充。AI 当前主要依据 JD 和能力模型进行分析。")}</p>
+              </div>
               <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
-                <button class="btn secondary" data-action="edit-jd">编辑 JD</button>
+                <button class="btn secondary" data-action="edit-jd">编辑岗位输入</button>
                 <button class="btn primary" data-step="2">查看 AI 能力模型</button>
               </div>
             </div>
@@ -948,7 +955,7 @@ function renderRequirement() {
             <div class="card">
               <div class="card-head"><div><h3>输入来源</h3><p>结论只基于以下可追溯信息</p></div></div>
               <div class="card-body">
-                <p><span class="tag green">JD 原文</span> <span class="tag blue">招聘经理补充</span></p>
+                <p><span class="tag green">JD 原文</span> <span class="tag purple">业务理解</span> <span class="tag blue">招聘经理补充</span></p>
                 <p class="tiny">暂未使用候选人的年龄、性别、婚育等非岗位相关信息。</p>
               </div>
             </div>
@@ -1837,6 +1844,9 @@ function analysisJobPayload(job) {
     title: job.title,
     industry: job.industry,
     summary: job.summary,
+    jdText: job.jdText || "",
+    businessContext: job.businessContext || "",
+    note: job.note || "",
     model: job.model,
     adjacent: job.adjacent,
     knowledgePack: buildKnowledgeContext(job)
@@ -2211,6 +2221,7 @@ function candidateReportMarkdown(candidate) {
 ## 分析对象
 
 - 目标岗位：${job.title}
+- HR 对业务的理解：${job.businessContext || "未补充"}
 - 候选人当前经历：${candidate.role}
 - 公司：${candidate.company}
 - 系统建议：${candidate.verdict}
@@ -2324,7 +2335,7 @@ function evaluationExportData() {
   const metrics = getEvaluationMetrics(job);
   return {
     generatedAt: new Date().toISOString(),
-    job: { id: job.id, title: job.title, industry: job.industry },
+    job: { id: job.id, title: job.title, industry: job.industry, businessContext: job.businessContext || "" },
     methodology: {
       note: "召回率和精确率仅使用已完成人工标注的候选人计算",
       averageManualReviewMinutes: 2.5
@@ -2403,27 +2414,47 @@ function enterJdEditMode() {
   const box = document.querySelector(".jd-box");
   if (!box) return;
   const fallback = box.innerText.trim();
-  box.outerHTML = `<textarea class="paste-area jd-editor" id="jdEditor">${escapeHtml(job.jdText || fallback)}</textarea>`;
-  const actions = document.querySelector(".jd-editor")?.nextElementSibling;
+  box.outerHTML = `
+    <div class="job-input-editors">
+      <label><span>岗位 JD</span><textarea class="paste-area jd-editor" id="jdEditor">${escapeHtml(job.jdText || fallback)}</textarea></label>
+      <label><span>HR 对业务的理解</span><textarea class="paste-area business-context-editor" id="businessContextEditor" placeholder="例如：我们要做的是 NPU 架构的边缘加速推理芯片。">${escapeHtml(job.businessContext || "")}</textarea><small>可以使用业务口语、碎片信息或尚未完全确定的方向。</small></label>
+    </div>`;
+  document.querySelector(".business-context-box")?.remove();
+  const actions = document.querySelector(".job-input-editors")?.nextElementSibling;
   if (actions) {
     actions.innerHTML = `<button class="btn secondary" data-action="cancel-jd-edit">取消</button><button class="btn primary" data-action="save-jd">保存并重新解析</button>`;
   }
 }
 
-function saveEditedJd() {
+async function saveEditedJd() {
   const text = document.getElementById("jdEditor")?.value.trim();
+  const businessContext = document.getElementById("businessContextEditor")?.value.trim() || "";
   if (!text) {
     toast("JD 不能为空");
     return;
   }
   const job = currentJob();
   job.jdText = text;
+  job.businessContext = businessContext;
   job.jd = formatJd(text, job.note || "");
-  const clauses = text.split(/[\n；。]/).map(item => item.trim()).filter(item => item.length >= 6);
-  job.summary = clauses[0] || job.summary;
+  try {
+    const data = await apiRequest("/api/analyze-job", {
+      title: job.title,
+      industry: job.industry,
+      jd: text,
+      businessContext,
+      note: job.note || ""
+    });
+    job.summary = data.result.summary;
+    job.model = data.result.capabilities.map(item => [item.name, item.description, item.priority]);
+    job.adjacent = data.result.adjacent;
+  } catch {
+    const clauses = `${businessContext}\n${text}`.split(/[\n；。]/).map(item => item.trim()).filter(item => item.length >= 6);
+    job.summary = clauses[0] || job.summary;
+  }
   saveState();
   renderRequirement();
-  toast("JD 已更新", "岗位理解已按新内容刷新");
+  toast("岗位输入已更新", "AI 分析视角已按 JD 和业务理解刷新");
 }
 
 function handleClick(event) {
@@ -2615,7 +2646,7 @@ function handleClick(event) {
   }
   if (action === "edit-jd") enterJdEditMode();
   if (action === "cancel-jd-edit") renderRequirement();
-  if (action === "save-jd") saveEditedJd();
+  if (action === "save-jd") void saveEditedJd();
   if (action === "choose-files") document.getElementById("resumeFileInput")?.click();
   if (action === "remove-upload") {
     state.uploadFiles.splice(Number(actionEl.dataset.index), 1);
@@ -2651,6 +2682,7 @@ document.addEventListener("submit", async event => {
   const title = document.getElementById("newJobTitle").value.trim();
   const industry = document.getElementById("newJobIndustry").value.trim();
   const jdText = document.getElementById("newJobJd").value.trim();
+  const businessContext = document.getElementById("newJobBusinessContext").value.trim();
   const note = document.getElementById("newJobNote").value.trim();
   if (!title || !industry || !jdText) {
     toast("请填写岗位名称、行业和 JD");
@@ -2664,7 +2696,7 @@ document.addEventListener("submit", async event => {
   let job;
   let mode = "demo";
   try {
-    const data = await apiRequest("/api/analyze-job", { title, industry, jd: jdText, note });
+    const data = await apiRequest("/api/analyze-job", { title, industry, jd: jdText, businessContext, note });
     const result = data.result;
     job = {
       id: `job-${Date.now()}`,
@@ -2674,6 +2706,7 @@ document.addEventListener("submit", async event => {
       summary: result.summary,
       jdText,
       jd: formatJd(jdText, note),
+      businessContext,
       note,
       model: result.capabilities.map(item => [item.name, item.description, item.priority]),
       adjacent: result.adjacent,
@@ -2681,7 +2714,7 @@ document.addEventListener("submit", async event => {
     };
     mode = data.mode;
   } catch (error) {
-    job = buildJobFromForm(title, industry, jdText, note);
+    job = buildJobFromForm(title, industry, jdText, businessContext, note);
     toast("AI 服务暂不可用", `已使用本地规则生成：${error.message}`);
   } finally {
     submitButton.classList.remove("loading");
