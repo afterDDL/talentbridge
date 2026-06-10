@@ -605,6 +605,30 @@ function researchKeywords(job) {
     .slice(0, 8);
 }
 
+function companyNameVariants(company) {
+  const original = String(company || "").trim();
+  const suffixes = [
+    "有限责任公司", "股份有限公司", "技术股份有限公司", "科技股份有限公司",
+    "技术有限公司", "科技有限公司", "集团有限公司", "控股有限公司",
+    "有限公司", "股份公司", "集团", "公司"
+  ];
+  const variants = [original];
+  let shortened = original.replace(/[（(].*?[）)]/g, "").trim();
+  let changed = true;
+  while (changed && shortened) {
+    changed = false;
+    for (const suffix of suffixes) {
+      if (shortened.endsWith(suffix) && shortened.length > suffix.length + 1) {
+        shortened = shortened.slice(0, -suffix.length).trim();
+        variants.push(shortened);
+        changed = true;
+        break;
+      }
+    }
+  }
+  return [...new Set(variants.filter(item => item.length >= 2))];
+}
+
 function fallbackIndustryResearchPlan(job) {
   const coreTerms = researchKeywords(job);
   const englishTerms = researchEnglishTerms(job).split(/\s+/).filter(item => item.length >= 3);
@@ -848,10 +872,14 @@ async function discoverStructuredCompanySources(company, job, researchPlan) {
   const resolvedEntities = [];
   let officialHost = "";
   try {
-    const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(company)}&language=zh&limit=3&format=json&origin=*`;
-    const searchResponse = await fetchResearchResource(searchUrl, "application/json");
-    const searchData = JSON.parse(searchResponse.text);
-    const entityHit = searchData.search?.[0];
+    let entityHit = null;
+    for (const variant of companyNameVariants(company)) {
+      const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(variant)}&language=zh&uselang=zh&limit=5&format=json&origin=*`;
+      const searchResponse = await fetchResearchResource(searchUrl, "application/json");
+      const searchData = JSON.parse(searchResponse.text);
+      entityHit = searchData.search?.[0] || null;
+      if (entityHit) break;
+    }
     if (!entityHit?.id) return { directSources, pageCandidates, entityNames, resolvedEntities };
 
     const entity = await fetchWikidataEntity(entityHit.id);
@@ -1278,6 +1306,17 @@ async function researchCompany(payload) {
   const sources = researchBundle.sources;
   if (!sources.length) {
     const result = insufficientCompanyResearch(company, "未找到可核验的公开网页", [], researchBundle.resolvedEntities);
+    companyResearchCache.set(cacheKey, { cachedAt: Date.now(), result });
+    return result;
+  }
+  const companyEvidenceSources = sources.filter(source => source.sourceCategory !== "行业参照");
+  if (!companyEvidenceSources.length) {
+    const result = insufficientCompanyResearch(
+      company,
+      "仅找到行业资料，未识别到可核验的公司实体或公司来源，已停止生成公司事实",
+      sources,
+      researchBundle.resolvedEntities
+    );
     companyResearchCache.set(cacheKey, { cachedAt: Date.now(), result });
     return result;
   }
