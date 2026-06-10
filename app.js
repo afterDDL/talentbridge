@@ -661,7 +661,7 @@ function renderWorkbench() {
         <div class="hero-copy">
           <p class="eyebrow">AI 人才研究工作台</p>
           <h1>找到关键词之外，真正值得被看见的人</h1>
-          <p>将岗位要求与候选人经历还原为底层任务和能力，识别潜在迁移关系。每个判断都有证据，每个缺口都留给人来确认。</p>
+          <p>传统关键词筛选难以理解不同岗位、技术路线和行业经历背后相通的任务与能力，既容易漏掉具备迁移潜力的人才，也可能放入只有关键词却缺少真实经验的人选。TalentBridge 基于系统化的行业与技术研究，将岗位要求和候选人经历还原为底层任务、技术机理与能力证据，识别可信的迁移关系，帮助 HR 找回漏选人才，并通过人工复核、招聘进展回填和效果复盘，完成从岗位理解到招聘结果验证的业务闭环。</p>
           <div class="hero-actions">
             <button class="btn primary" data-action="open-current">继续分析当前岗位</button>
             <button class="btn secondary" data-action="new-project">＋ 创建招聘项目</button>
