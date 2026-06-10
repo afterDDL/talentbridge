@@ -139,7 +139,7 @@ const companyResearchSchema = {
   type: "object",
   additionalProperties: false,
   required: [
-    "status", "summary", "resolvedEntities", "industryPosition", "valueChainRole", "businessModel",
+    "status", "summary", "researchFocus", "operatingStructure", "resolvedEntities", "industryPosition", "valueChainRole", "businessModel",
     "customerMarkets", "operatingStage", "products", "technologies", "technologyEvidence",
     "industryBenchmarks", "researchMap", "criticalChokepoints", "verificationGates",
     "narrativeChecks", "sourceAssessment", "fit", "fitReasons", "jdMapping", "hrInsights", "gaps", "sourceIds"
@@ -147,6 +147,35 @@ const companyResearchSchema = {
   properties: {
     status: { type: "string", enum: ["researched", "insufficient"] },
     summary: { type: "string" },
+    researchFocus: {
+      type: "object",
+      additionalProperties: false,
+      required: ["primaryEntity", "whyPrimary", "employmentLink", "sourceIds"],
+      properties: {
+        primaryEntity: { type: "string" },
+        whyPrimary: { type: "string" },
+        employmentLink: { type: "string", enum: ["已确认", "高度相关但未确认", "未确认"] },
+        sourceIds: { type: "array", minItems: 1, maxItems: 4, items: { type: "integer", minimum: 1, maximum: 12 } }
+      }
+    },
+    operatingStructure: {
+      type: "array",
+      minItems: 1,
+      maxItems: 8,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "type", "businessRole", "relationshipToInput", "priority", "sourceIds"],
+        properties: {
+          name: { type: "string" },
+          type: { type: "string", enum: ["集团", "法律主体", "业务单元", "产品平台", "品牌"] },
+          businessRole: { type: "string" },
+          relationshipToInput: { type: "string" },
+          priority: { type: "string", enum: ["重点研究", "相关背景", "仅组织背景"] },
+          sourceIds: { type: "array", minItems: 1, maxItems: 4, items: { type: "integer", minimum: 1, maximum: 12 } }
+        }
+      }
+    },
     resolvedEntities: {
       type: "array",
       minItems: 1,
@@ -605,7 +634,7 @@ function researchKeywords(job) {
     .slice(0, 8);
 }
 
-function companyNameVariants(company) {
+function companyNameVariants(company, researchPlan = null) {
   const original = String(company || "").trim();
   const suffixes = [
     "有限责任公司", "股份有限公司", "技术股份有限公司", "科技股份有限公司",
@@ -622,6 +651,32 @@ function companyNameVariants(company) {
         shortened = shortened.slice(0, -suffix.length).trim();
         variants.push(shortened);
         changed = true;
+        break;
+      }
+    }
+  }
+  const businessTerms = [
+    ...(researchPlan?.coreTerms || []),
+    ...(researchPlan?.entityTerms || []),
+    ...(researchPlan?.valueChainTerms || []),
+    String(researchPlan?.industry || "")
+  ].flatMap(item => String(item).split(/[、/，,\s·]+/))
+    .filter(item => item.length >= 2)
+    .sort((a, b) => b.length - a.length);
+  for (const term of businessTerms) {
+    for (const variant of [...variants]) {
+      if (variant.endsWith(term) && variant.length >= term.length + 2) {
+        variants.push(variant.slice(0, -term.length).trim());
+      }
+    }
+  }
+  const researchText = JSON.stringify(researchPlan || {});
+  for (const variant of [...variants]) {
+    const maxSuffixLength = Math.min(8, variant.length - 2);
+    for (let length = maxSuffixLength; length >= 2; length -= 1) {
+      const suffix = variant.slice(-length);
+      if (researchText.includes(suffix)) {
+        variants.push(variant.slice(0, -length).trim());
         break;
       }
     }
@@ -864,6 +919,70 @@ async function searchResearchWeb(queries) {
   return [...unique.values()];
 }
 
+function relatedEntityDiscoveryTerms(job, researchPlan) {
+  return [...new Set([
+    ...(researchPlan?.entityTerms || []),
+    ...(researchPlan?.coreTerms || []),
+    ...(researchPlan?.englishTerms || []),
+    String(job?.industry || ""),
+    String(job?.title || "")
+  ].map(item => String(item).trim()).filter(item => item.length >= 2))].slice(0, 8);
+}
+
+async function discoverRelatedBusinessEntityPages(company, job, researchPlan, entityNames = [company]) {
+  const baseNames = [...new Set([
+    ...companyNameVariants(company, researchPlan),
+    ...entityNames
+  ].filter(Boolean))].slice(0, 2);
+  const terms = relatedEntityDiscoveryTerms(job, researchPlan);
+  const focusText = terms.slice(0, 3).join(" ");
+  const queries = baseNames.flatMap(name => [
+    `"${name}" 子公司 事业部 品牌 ${focusText}`,
+    `"${name}" subsidiary business unit brand ${focusText}`
+  ]);
+  const results = await searchResearchWeb(queries);
+  const blockedHosts = /(?:bing|baidu|google|duckduckgo|facebook|linkedin|zhihu|weibo|bilibili)\./i;
+  return results.filter(item => {
+    try {
+      if (blockedHosts.test(new URL(item.url).hostname)) return false;
+      const text = `${item.title || ""} ${item.description || ""}`.toLowerCase();
+      const baseMatch = baseNames.some(name => text.includes(String(name).toLowerCase()));
+      return baseMatch;
+    } catch {
+      return false;
+    }
+  }).slice(0, 8).map(item => ({
+    ...item,
+    evidenceLevel: "关联主体检索"
+  }));
+}
+
+async function discoverWikipediaCompanySources(company, researchPlan) {
+  for (const variant of companyNameVariants(company, researchPlan)) {
+    try {
+      const searchUrl = `https://zh.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(variant)}&gsrlimit=3&prop=extracts%7Cinfo&explaintext=1&inprop=url&format=json&origin=*`;
+      const response = await fetchResearchResource(searchUrl, "application/json");
+      const data = JSON.parse(response.text);
+      const pages = Object.values(data.query?.pages || {})
+        .filter(page => page.extract && (page.title.includes(variant) || variant.includes(page.title)))
+        .sort((a, b) => (b.extract?.length || 0) - (a.extract?.length || 0));
+      if (!pages.length) continue;
+      const page = pages[0];
+      return [{
+        title: `${page.title} · Wikipedia`,
+        url: page.fullurl || `https://zh.wikipedia.org/wiki/${encodeURIComponent(page.title.replace(/ /g, "_"))}`,
+        domain: "zh.wikipedia.org",
+        content: page.extract.slice(0, 12000),
+        evidenceLevel: "百科正文",
+        sourceCategory: "外部核验"
+      }];
+    } catch (error) {
+      console.warn("Wikipedia company discovery failed:", error.message);
+    }
+  }
+  return [];
+}
+
 async function discoverStructuredCompanySources(company, job, researchPlan) {
   const directSources = [];
   const pageCandidates = [];
@@ -872,7 +991,7 @@ async function discoverStructuredCompanySources(company, job, researchPlan) {
   let officialHost = "";
   try {
     let entityHit = null;
-    for (const variant of companyNameVariants(company)) {
+    for (const variant of companyNameVariants(company, researchPlan)) {
       const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(variant)}&language=zh&uselang=zh&limit=5&format=json&origin=*`;
       const searchResponse = await fetchResearchResource(searchUrl, "application/json");
       const searchData = JSON.parse(searchResponse.text);
@@ -1101,14 +1220,18 @@ async function discoverIndustryPages(job, researchPlan) {
 }
 
 async function collectCompanySources(company, job, researchPlan) {
-  const structured = await discoverStructuredCompanySources(company, job, researchPlan);
-  const [companyPages, industryPages, academicSources] = await Promise.all([
+  const [structured, wikipediaSources] = await Promise.all([
+    discoverStructuredCompanySources(company, job, researchPlan),
+    discoverWikipediaCompanySources(company, researchPlan)
+  ]);
+  const [relatedEntityPages, companyPages, industryPages, academicSources] = await Promise.all([
+    discoverRelatedBusinessEntityPages(company, job, researchPlan, structured.entityNames),
     discoverCompanyPages(company, job, researchPlan, structured.officialHost, structured.entityNames),
     discoverIndustryPages(job, researchPlan),
     discoverOpenAlexIndustrySources(job, researchPlan)
   ]);
-  const results = [...structured.pageCandidates, ...companyPages, ...industryPages];
-  const sources = [...structured.directSources, ...academicSources.slice(0, 2)]
+  const results = [...structured.pageCandidates, ...relatedEntityPages, ...companyPages, ...industryPages];
+  const sources = [...structured.directSources, ...wikipediaSources, ...academicSources.slice(0, 2)]
     .slice(0, 12)
     .map((source, index) => ({ ...source, id: index + 1 }));
   const seenFinalUrls = new Set(sources.map(source => source.url));
@@ -1154,11 +1277,26 @@ async function collectCompanySources(company, job, researchPlan) {
 }
 
 function insufficientCompanyResearch(company, reason, sources = [], resolvedEntities = []) {
+  const fallbackSourceIds = sources[0]?.id ? [sources[0].id] : [1];
   return {
     status: "insufficient",
     skill: industryResearchSkill.VERSION,
     company,
     summary: reason,
+    researchFocus: {
+      primaryEntity: company,
+      whyPrimary: "尚未找到足够证据识别更具体的实际业务主体",
+      employmentLink: "未确认",
+      sourceIds: fallbackSourceIds
+    },
+    operatingStructure: [{
+      name: company,
+      type: "法律主体",
+      businessRole: "公开信息不足",
+      relationshipToInput: "简历所列名称，主体类型待核验",
+      priority: "重点研究",
+      sourceIds: fallbackSourceIds
+    }],
     resolvedEntities: resolvedEntities.length
       ? resolvedEntities.map((entity, index) => ({
         ...entity,
@@ -1268,6 +1406,10 @@ function sanitizeCompanyResearchEvidence(result) {
 
 function referencedResearchSourceIds(result) {
   const ids = new Set(result.sourceIds || []);
+  for (const id of result.researchFocus?.sourceIds || []) ids.add(id);
+  for (const item of result.operatingStructure || []) {
+    for (const id of item.sourceIds || []) ids.add(id);
+  }
   for (const item of result.technologyEvidence || []) {
     for (const id of item.sourceIds || []) ids.add(id);
   }
@@ -1336,7 +1478,7 @@ async function researchCompany(payload) {
     name: "industry_research_skill",
     schema: companyResearchSchema,
     system: industryResearchSkill.SYSTEM_PROMPT,
-    input: `简历所列企业：${company}\n候选人岗位：${payload.role || "未说明"}\n目标岗位：${JSON.stringify(job)}\n动态行业研究计划：${JSON.stringify(researchPlan)}\n预识别关联主体：${JSON.stringify(researchBundle.resolvedEntities)}\n\n公开网页：\n${sourceInput}`
+    input: `简历所列企业：${company}\n候选人岗位：${payload.role || "未说明"}\n目标岗位：${JSON.stringify(job)}\n动态行业研究计划：${JSON.stringify(researchPlan)}\n预识别关联主体：${JSON.stringify(researchBundle.resolvedEntities)}\n\n先判断输入名称是集团、法律实体、业务统称、业务单元还是品牌；再根据目标 JD 从有来源支持的关联主体中选择重点研究主体。重点研究主体可以与简历所列名称不同，但不得据此确认候选人的雇佣关系。\n\n公开网页：\n${sourceInput}`
   });
   const sanitizedResult = sanitizeCompanyResearchEvidence(result);
   const selectedIds = referencedResearchSourceIds(sanitizedResult);

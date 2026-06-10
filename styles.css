@@ -382,6 +382,21 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .research-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .research-summary > div { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .research-summary strong { font-size: 13px; line-height: 1.55; }
+.research-focus-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; padding: 14px 16px; border: 1px solid #b9cbff; border-radius: 8px; background: linear-gradient(135deg, #f4f7ff, #faf8ff); }
+.research-focus-card span, .research-focus-card strong, .research-focus-card p { display: block; }
+.research-focus-card span { color: var(--blue); font-size: 10px; font-weight: 600; }
+.research-focus-card strong { margin-top: 4px; font-size: 17px; }
+.research-focus-card p { margin: 5px 0 0; color: var(--text-2); font-size: 11px; line-height: 1.5; }
+.research-focus-card em { flex: 0 0 auto; padding: 5px 9px; border-radius: 999px; background: white; color: #7653c9; font-size: 10px; font-style: normal; box-shadow: 0 0 0 1px #ddd5f5; }
+.operating-structure { margin-top: 12px; padding: 11px 12px; border: 1px solid #e3ddf5; border-radius: 7px; background: #faf8ff; }
+.operating-structure > span { display: block; margin-bottom: 8px; color: var(--text-3); font-size: 10px; font-weight: 600; }
+.operating-structure > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.operating-structure p { margin: 0; padding: 9px 10px; border: 1px solid transparent; border-radius: 6px; background: white; }
+.operating-structure p.is-primary { border-color: #b9cbff; box-shadow: inset 3px 0 0 var(--blue); }
+.operating-structure strong, .operating-structure em, .operating-structure small { display: block; }
+.operating-structure strong { font-size: 11px; }
+.operating-structure em { margin-top: 3px; color: var(--purple); font-size: 9px; font-style: normal; }
+.operating-structure small { margin-top: 4px; color: var(--text-3); font-size: 9px; line-height: 1.4; }
 .industry-fact-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
 .industry-fact-grid div { padding: 9px 10px; border: 1px solid var(--line-soft); border-radius: 6px; background: #fafafa; }
 .industry-fact-grid span, .industry-fact-grid strong { display: block; }
@@ -626,6 +641,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   .content-grid { grid-template-columns: minmax(0, 1fr) 300px; }
   .decision-page-grid { grid-template-columns: minmax(0, 1fr) 300px; }
   .industry-fact-grid { grid-template-columns: 1fr 1fr; }
+  .operating-structure > div { grid-template-columns: 1fr 1fr; }
   .migration-map { grid-template-columns: 1fr 32px 1.1fr 32px 1fr; }
   .page-body, .dashboard-body { padding-left: 22px; padding-right: 22px; }
 }
