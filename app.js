@@ -261,6 +261,61 @@ const state = {
 };
 
 const STORAGE_KEY = "talentbridge-demo-state-v1";
+const REVIEW_DECISIONS = ["推荐联系", "暂缓", "不合适", "信息不足"];
+const REVIEW_REASONS = [
+  "技术机制相通",
+  "任务场景相似",
+  "量产或交付经验",
+  "个人职责明确",
+  "关键经验待验证",
+  "个人职责不明确",
+  "目标技术存在缺口",
+  "简历证据不足"
+];
+const HIRING_STAGES = ["未跟进", "待联系", "已联系", "愿意沟通", "进入面试", "面试通过", "Offer", "已入职", "淘汰", "候选人拒绝"];
+
+function normalizeDecision(value = "") {
+  return ({
+    "优先联系": "推荐联系",
+    "保留复核": "暂缓",
+    "暂不匹配": "不合适"
+  })[value] || value;
+}
+
+function candidateRecord(candidateId, jobId = state.currentJob) {
+  const stored = state.decisions[`${jobId}:${candidateId}`] || {};
+  return {
+    value: normalizeDecision(stored.value || ""),
+    reasons: Array.isArray(stored.reasons) ? stored.reasons : [],
+    note: stored.note || "",
+    stage: HIRING_STAGES.includes(stored.stage) ? stored.stage : "未跟进",
+    stageNote: stored.stageNote || "",
+    updatedAt: stored.updatedAt || ""
+  };
+}
+
+function saveCandidateRecord(candidateId, record, jobId = state.currentJob) {
+  state.decisions[`${jobId}:${candidateId}`] = {
+    ...candidateRecord(candidateId, jobId),
+    ...record,
+    updatedAt: new Date().toISOString()
+  };
+  saveState();
+}
+
+function decisionEvaluation(value) {
+  if (value === "推荐联系" || value === "暂缓") return "relevant";
+  if (value === "不合适") return "irrelevant";
+  return "unknown";
+}
+
+function hiringStageClass(stage) {
+  if (["Offer", "已入职"].includes(stage)) return "green";
+  if (["进入面试", "面试通过"].includes(stage)) return "blue";
+  if (["已联系", "愿意沟通"].includes(stage)) return "cyan";
+  if (["淘汰", "候选人拒绝"].includes(stage)) return "gray";
+  return "amber";
+}
 
 function loadSavedState() {
   try {
@@ -589,9 +644,17 @@ function renderWorkbench() {
     .filter(candidate => candidate.recovered)
     .map(candidate => ({ job, candidate })));
   const reviewItems = importedJobs.flatMap(job => job.candidates
-    .filter(candidate => ["review", "unknown"].includes(candidate.group))
+    .filter(candidate => !candidateRecord(candidate.id, job.id).value)
     .map(candidate => ({ job, candidate })));
-  const insightItems = recoveredItems.slice(0, 3);
+  const followedUpItems = importedJobs.flatMap(job => job.candidates
+    .filter(candidate => !["未跟进", "待联系"].includes(candidateRecord(candidate.id, job.id).stage))
+    .map(candidate => ({ job, candidate })));
+  const interviewItems = followedUpItems.filter(({ job, candidate }) =>
+    ["进入面试", "面试通过", "Offer", "已入职"].includes(candidateRecord(candidate.id, job.id).stage));
+  const insightItems = [
+    ...recoveredItems.filter(({ job, candidate }) => !candidateRecord(candidate.id, job.id).value),
+    ...recoveredItems.filter(({ job, candidate }) => candidateRecord(candidate.id, job.id).value)
+  ].slice(0, 3);
   main.innerHTML = `
     <section class="page">
       <div class="overview-hero">
@@ -609,7 +672,9 @@ function renderWorkbench() {
           <div class="insight-title"><span class="pulse"></span>招聘行动提醒</div>
           <div class="insight-metrics">
             <div><strong>${recoveredItems.length}</strong><span>AI 新找回</span><small>ATS 未命中但存在迁移证据</small></div>
-            <div><strong>${reviewItems.length}</strong><span>待 HR 判断</span><small>值得复核或信息仍不足</small></div>
+            <div><strong>${reviewItems.length}</strong><span>待 HR 判断</span><small>尚未提交结构化复核结论</small></div>
+            <div><strong>${followedUpItems.length}</strong><span>已开始跟进</span><small>已联系或进入后续招聘流程</small></div>
+            <div><strong>${interviewItems.length}</strong><span>进入面试</span><small>用于验证 AI 找回是否真正有效</small></div>
           </div>
           <div class="insight-candidates">
             <header><strong>建议优先查看</strong><span>${importedJobs.length} 个岗位已有候选人</span></header>
@@ -650,6 +715,11 @@ function startDemo() {
   state.evaluations["chip:chenhao"] = "relevant";
   state.evaluations["chip:wangrui"] = "relevant";
   state.evaluations["chip:liuming"] = "irrelevant";
+  state.decisions["chip:linjia"] = { value: "推荐联系", reasons: ["技术机制相通", "量产或交付经验"], note: "2.5D 到 3D 存在可验证的迁移路径。", stage: "进入面试", stageNote: "已完成首次沟通，安排工艺技术面。", updatedAt: new Date().toISOString() };
+  state.decisions["chip:zhouyi"] = { value: "推荐联系", reasons: ["任务场景相似", "个人职责明确"], note: "直接相关经验充分。", stage: "面试通过", stageNote: "技术面通过，待薪酬沟通。", updatedAt: new Date().toISOString() };
+  state.decisions["chip:chenhao"] = { value: "推荐联系", reasons: ["技术机制相通", "关键经验待验证"], note: "TSV 与晶圆级制程相关，需核实量产责任。", stage: "已联系", stageNote: "候选人愿意了解机会。", updatedAt: new Date().toISOString() };
+  state.decisions["chip:wangrui"] = { value: "暂缓", reasons: ["任务场景相似", "关键经验待验证"], note: "工艺整合能力较强，键合深度仍需确认。", stage: "未跟进", stageNote: "", updatedAt: new Date().toISOString() };
+  state.decisions["chip:liuming"] = { value: "不合适", reasons: ["目标技术存在缺口", "个人职责不明确"], note: "生产管理经验不能替代先进封装工艺开发。", stage: "淘汰", stageNote: "HR 复核后不进入沟通。", updatedAt: new Date().toISOString() };
   saveState();
   renderQueue();
   toast("标准演示已就绪", "先打开“林嘉”，查看 2.5D → 3D 的能力迁移路径");
@@ -727,7 +797,7 @@ function projectMetrics(job) {
   return [
     job.candidates.length,
     job.candidates.filter(candidate => candidate.recovered).length,
-    job.candidates.filter(candidate => ["review", "unknown"].includes(candidate.group)).length
+    job.candidates.filter(candidate => !candidateRecord(candidate.id, job.id).value).length
   ];
 }
 
@@ -1233,21 +1303,30 @@ function renderQueue() {
     toast("请先导入候选人", "可一键使用示例候选人体验完整流程");
     return;
   }
-  const visible = state.filter === "all" ? job.candidates : job.candidates.filter(c => c.group === state.filter || (state.filter === "recovered" && c.recovered));
+  const visible = job.candidates.filter(candidate => {
+    const record = candidateRecord(candidate.id, job.id);
+    if (state.filter === "all") return true;
+    if (state.filter === "recovered") return candidate.recovered;
+    if (state.filter === "pending-review") return !record.value;
+    if (state.filter === "interview") return ["进入面试", "面试通过", "Offer", "已入职"].includes(record.stage);
+    return candidate.group === state.filter;
+  });
   const recovered = job.candidates.filter(c => c.recovered).length;
+  const businessMetrics = getBusinessMetrics(job);
   main.innerHTML = `
     <section class="page">
       ${stepHeader(4)}
       <div class="page-body">
         <div class="compare-banner">
           <div><strong>AI 比关键词 ATS 多找回 ${recovered} 位值得复核的候选人</strong><p>增量候选人均提供迁移路径、原文证据和待验证缺口。</p></div>
-          <button class="btn secondary" data-action="show-compare">查看完整效果评估</button>
+          <button class="btn secondary" data-action="show-compare">查看效果复盘</button>
         </div>
         <div class="queue-stats">
           ${statCard("全部候选人", job.candidates.length, "已完成结构化分析")}
           ${statCard("优先联系", job.candidates.filter(c => c.group === "priority").length, "直接证据充分")}
           ${statCard("AI 新找回", recovered, "ATS 未命中", "cyan")}
-          ${statCard("待人工判断", job.candidates.filter(c => ["review","unknown"].includes(c.group)).length, "建议先看迁移证据")}
+          ${statCard("待人工判断", businessMetrics.pendingReview.length, "尚未提交 HR 复核结论")}
+          ${statCard("进入面试", businessMetrics.interviewed.length, "来自招聘结果回填")}
         </div>
         <div class="card">
           <div class="card-head" style="align-items:center">
@@ -1262,11 +1341,13 @@ function renderQueue() {
                 ${filterButton("review", "值得复核")}
                 ${filterButton("recovered", "AI 新找回")}
                 ${filterButton("unknown", "信息不足")}
+                ${filterButton("pending-review", "待 HR 复核")}
+                ${filterButton("interview", "面试中")}
               </div>
               <span class="tiny">共 ${visible.length} 位候选人</span>
             </div>
             <table class="candidate-table">
-              <thead><tr><th>候选人</th><th>建议</th><th>核心判断</th><th>能力覆盖</th><th>ATS 结果</th><th></th></tr></thead>
+              <thead><tr><th>候选人</th><th>AI 建议</th><th>HR 决策 / 进展</th><th>核心判断</th><th>能力覆盖</th><th></th></tr></thead>
               <tbody>
                 ${visible.length ? visible.map(candidateRow).join("") : `<tr><td colspan="6" class="table-empty">当前分类暂无候选人</td></tr>`}
               </tbody>
@@ -1287,31 +1368,80 @@ function filterButton(id, label) {
 
 function candidateRow(c) {
   const verdictClass = c.group === "priority" ? "green" : c.group === "review" ? "blue" : c.group === "unknown" ? "amber" : "gray";
+  const record = candidateRecord(c.id);
   return `
     <tr data-candidate="${c.id}">
       <td><div class="candidate-name"><span class="person-avatar">${c.name.slice(-1)}</span><div><strong>${c.name}${c.recovered ? ` <span class="tag cyan" style="margin-left:5px">AI 新找回</span>` : ""}</strong><span>${c.role} · ${c.company}</span></div></div></td>
-      <td><span class="tag ${verdictClass}">${c.verdict}</span></td>
+      <td><div class="candidate-progress"><span class="tag ${verdictClass}">${c.verdict}</span><small>${c.ats ? "ATS 命中" : "ATS 未命中"}</small></div></td>
+      <td><div class="candidate-progress"><strong>${record.value || "待复核"}</strong><span class="tag ${hiringStageClass(record.stage)}">${record.stage}</span></div></td>
       <td><div class="match-summary"><strong>${c.core}</strong><span>待确认：${c.gap}</span></div></td>
       <td><div class="coverage"><div class="coverage-bar"><i style="width:${c.coverage}%"></i></div><span>${c.coverage}%</span></div></td>
-      <td>${c.ats ? `<span class="tag gray">关键词命中</span>` : `<span class="tag red">未命中</span>`}</td>
       <td><button class="btn ghost small">查看分析 →</button></td>
     </tr>`;
 }
 
-function evaluationFor(candidate) {
-  const key = `${state.currentJob}:${candidate.id}`;
+function evaluationFor(candidate, jobId = state.currentJob) {
+  const key = `${jobId}:${candidate.id}`;
   if (state.evaluations[key]) return state.evaluations[key];
-  if (!candidate.custom) return ["priority", "review"].includes(candidate.group) ? "relevant" : candidate.group === "reject" ? "irrelevant" : "unknown";
+  const decision = candidateRecord(candidate.id, jobId).value;
+  if (decision) return decisionEvaluation(decision);
   return "unknown";
 }
 
+function getBusinessMetrics(job) {
+  const entries = job.candidates.map(candidate => ({
+    candidate,
+    record: candidateRecord(candidate.id, job.id)
+  }));
+  const reviewed = entries.filter(item => item.record.value);
+  const pendingReview = entries.filter(item => !item.record.value).map(item => item.candidate);
+  const recommended = entries.filter(item => item.record.value === "推荐联系").map(item => item.candidate);
+  const contactedStages = ["已联系", "愿意沟通", "进入面试", "面试通过", "Offer", "已入职"];
+  const interviewStages = ["进入面试", "面试通过", "Offer", "已入职"];
+  const offerStages = ["Offer", "已入职"];
+  const contacted = entries.filter(item => contactedStages.includes(item.record.stage)).map(item => item.candidate);
+  const interviewed = entries.filter(item => interviewStages.includes(item.record.stage)).map(item => item.candidate);
+  const offers = entries.filter(item => offerStages.includes(item.record.stage)).map(item => item.candidate);
+  const hired = entries.filter(item => item.record.stage === "已入职").map(item => item.candidate);
+  const recommendedContacted = entries.filter(item => item.record.value === "推荐联系" && contactedStages.includes(item.record.stage)).map(item => item.candidate);
+  const recoveredRecommended = entries.filter(item => item.candidate.recovered && item.record.value === "推荐联系").map(item => item.candidate);
+  const recoveredInterviewed = entries.filter(item => item.candidate.recovered && interviewStages.includes(item.record.stage)).map(item => item.candidate);
+  const overturned = entries.filter(item => {
+    const aiPositive = ["priority", "review"].includes(item.candidate.group);
+    const humanPositive = ["推荐联系", "暂缓"].includes(item.record.value);
+    return item.record.value && aiPositive !== humanPositive;
+  }).map(item => item.candidate);
+  const reasonCounts = reviewed
+    .flatMap(item => item.record.reasons)
+    .reduce((counts, reason) => ({ ...counts, [reason]: (counts[reason] || 0) + 1 }), {});
+  const topReasons = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1]);
+  const percent = (part, total) => total ? Math.round(part / total * 100) : 0;
+  return {
+    reviewed,
+    pendingReview,
+    recommended,
+    contacted,
+    interviewed,
+    offers,
+    hired,
+    recoveredRecommended,
+    recoveredInterviewed,
+    overturned,
+    topReasons,
+    reviewRate: percent(reviewed.length, job.candidates.length),
+    contactRate: percent(recommendedContacted.length, recommended.length),
+    interviewRate: percent(interviewed.length, contacted.length),
+    offerRate: percent(offers.length, interviewed.length)
+  };
+}
+
 function getEvaluationMetrics(job) {
-  const evaluated = job.candidates.filter(candidate => evaluationFor(candidate) !== "unknown");
-  const relevant = evaluated.filter(candidate => evaluationFor(candidate) === "relevant");
+  const evaluated = job.candidates.filter(candidate => evaluationFor(candidate, job.id) !== "unknown");
+  const relevant = evaluated.filter(candidate => evaluationFor(candidate, job.id) === "relevant");
   const atsSelected = evaluated.filter(candidate => candidate.ats);
   const aiSelected = evaluated.filter(candidate => ["priority", "review"].includes(candidate.group));
-  const atsTrue = atsSelected.filter(candidate => evaluationFor(candidate) === "relevant");
-  const aiTrue = aiSelected.filter(candidate => evaluationFor(candidate) === "relevant");
+  const atsTrue = atsSelected.filter(candidate => evaluationFor(candidate, job.id) === "relevant");
+  const aiTrue = aiSelected.filter(candidate => evaluationFor(candidate, job.id) === "relevant");
   const percent = (part, total) => total ? Math.round(part / total * 100) : 0;
   return {
     evaluated,
@@ -1326,25 +1456,23 @@ function getEvaluationMetrics(job) {
     shared: job.candidates.filter(candidate => candidate.ats && ["priority", "review"].includes(candidate.group)),
     atsOnly: job.candidates.filter(candidate => candidate.ats && !["priority", "review"].includes(candidate.group)),
     missed: job.candidates.filter(candidate => !candidate.ats && !["priority", "review"].includes(candidate.group)),
-    unknown: job.candidates.filter(candidate => evaluationFor(candidate) === "unknown")
+    unknown: job.candidates.filter(candidate => evaluationFor(candidate, job.id) === "unknown")
   };
 }
 
 function renderComparison() {
   const job = currentJob();
   const metrics = getEvaluationMetrics(job);
+  const business = getBusinessMetrics(job);
   state.view = "job";
   setActiveSidebar();
   renderRecentJobs();
-  const atsMinutes = job.candidates.length * 2.5;
-  const aiReviewMinutes = metrics.aiSelected.length * 2.5;
-  const savedMinutes = Math.max(0, Math.round(atsMinutes - aiReviewMinutes));
   main.innerHTML = `
     <section class="page">
       <div class="page-head" style="padding-bottom:18px">
-        <div class="breadcrumbs"><button class="btn ghost small" data-action="back-queue">← 返回复核队列</button><span>/</span><b>效果评估</b></div>
+        <div class="breadcrumbs"><button class="btn ghost small" data-action="back-queue">← 返回复核队列</button><span>/</span><b>效果复盘</b></div>
         <div class="title-row">
-          <div class="title-copy"><div><h1>ATS 与 AI 筛选效果</h1><p>${job.title} · 仅基于已完成人工标注的候选人计算</p></div></div>
+          <div class="title-copy"><div><h1>招聘结果与 AI 找回效果</h1><p>${job.title} · 从 HR 复核一路追踪到面试、Offer 与入职</p></div></div>
           <div class="title-actions">
             <button class="btn secondary" data-action="copy-evaluation">复制摘要</button>
             <button class="btn secondary" data-action="export-evaluation-csv">导出 CSV</button>
@@ -1353,16 +1481,33 @@ function renderComparison() {
         </div>
       </div>
       <div class="page-body">
-        ${metrics.unknown.length ? `<div class="evaluation-warning"><strong>还有 ${metrics.unknown.length} 位候选人未完成人工标注</strong><span>他们暂不进入召回率和精确率计算，避免指标失真。</span></div>` : ""}
+        <div class="business-funnel-grid">
+          ${businessOutcomeCard("完成复核", business.reviewed.length, `${business.reviewRate}% 候选人已有 HR 结论`, "blue")}
+          ${businessOutcomeCard("推荐联系", business.recommended.length, `${business.contactRate}% 已实际联系`, "cyan")}
+          ${businessOutcomeCard("进入面试", business.interviewed.length, `${business.interviewRate}% 联系后进入面试`, "purple")}
+          ${businessOutcomeCard("Offer / 入职", business.offers.length, `${business.offerRate}% 面试后获得 Offer`, "green")}
+        </div>
+        <div class="card outcome-insight-card">
+          <div>
+            <p class="eyebrow">AI 增量价值</p>
+            <strong>${business.recoveredRecommended.length} 位 ATS 漏选人才被 HR 推荐，其中 ${business.recoveredInterviewed.length} 位进入面试</strong>
+            <span>这两个数字来自真实复核决策和招聘进展回填，不使用预计节省时间。</span>
+          </div>
+          <div class="outcome-mini-metrics">
+            <p><strong>${business.pendingReview.length}</strong><span>待复核</span></p>
+            <p><strong>${business.overturned.length}</strong><span>HR 推翻 AI</span></p>
+            <p><strong>${business.hired.length}</strong><span>已入职</span></p>
+          </div>
+        </div>
+        ${metrics.unknown.length ? `<div class="evaluation-warning"><strong>还有 ${metrics.unknown.length} 位候选人没有模型质量标签</strong><span>未明确复核的人不进入召回率和精确率计算，避免指标失真。</span></div>` : ""}
         <div class="metric-compare-grid">
           ${metricCompareCard("召回率", metrics.atsRecall, metrics.aiRecall, "合理候选人中，被系统找回的比例")}
           ${metricCompareCard("精确率", metrics.atsPrecision, metrics.aiPrecision, "系统建议复核的人中，人工确认合理的比例")}
           <div class="card impact-card">
-            <p class="eyebrow">复核成本估算</p>
-            <strong>${savedMinutes}<small> 分钟</small></strong>
-            <p>按每份简历平均人工阅读 2.5 分钟估算</p>
-            <div><span>全量人工阅读</span><b>${atsMinutes} 分钟</b></div>
-            <div><span>AI 推荐队列</span><b>${aiReviewMinutes} 分钟</b></div>
+            <p class="eyebrow">主要人工判断依据</p>
+            <strong>${business.topReasons.length}<small> 类理由</small></strong>
+            <p>用于解释 HR 为什么接受或推翻 AI 建议</p>
+            ${(business.topReasons.slice(0, 2).map(([reason, count]) => `<div><span>${reason}</span><b>${count} 次</b></div>`).join("")) || `<div><span>尚未填写结构化理由</span><b>待补充</b></div>`}
           </div>
         </div>
         <div class="card result-map-card">
@@ -1376,7 +1521,16 @@ function renderComparison() {
           </div>
         </div>
         <div class="card">
-          <div class="card-head"><div><h2>人工评估标注</h2><p>人工标准答案独立于 ATS 和 AI 结论，可随复核结果更新</p></div><span class="tag gray">${metrics.evaluated.length}/${job.candidates.length} 已标注</span></div>
+          <div class="card-head"><div><h2>复核与招聘进展明细</h2><p>将 AI 建议、HR 决策理由和后续招聘结果放在同一张表里</p></div><span class="tag blue">${business.reviewed.length}/${job.candidates.length} 已复核</span></div>
+          <div class="card-body" style="padding:0">
+            <table class="candidate-table feedback-table">
+              <thead><tr><th>候选人</th><th>AI 建议</th><th>HR 决策</th><th>核心理由</th><th>招聘进展</th><th>更新时间</th></tr></thead>
+              <tbody>${job.candidates.map(feedbackRow).join("")}</tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h2>模型质量人工标签</h2><p>复核决策会自动同步，也可在这里单独校正，用于计算召回率和精确率</p></div><span class="tag gray">${metrics.evaluated.length}/${job.candidates.length} 已标注</span></div>
           <div class="card-body" style="padding:0">
             <table class="candidate-table evaluation-table">
               <thead><tr><th>候选人</th><th>ATS</th><th>AI 建议</th><th>人工标准答案</th><th>结果说明</th></tr></thead>
@@ -1387,6 +1541,25 @@ function renderComparison() {
         <p class="evaluation-footnote">注：当前 Demo 指标用于验证产品逻辑，不代表生产环境准确率。正式评估需扩大样本，并由业务专家进行盲标。</p>
       </div>
     </section>`;
+}
+
+function businessOutcomeCard(label, value, detail, color) {
+  return `<div class="card business-outcome-card ${color}"><span>${label}</span><strong>${value}</strong><p>${detail}</p></div>`;
+}
+
+function feedbackRow(candidate) {
+  const record = candidateRecord(candidate.id);
+  const aiClass = candidate.group === "priority" ? "green" : candidate.group === "review" ? "blue" : candidate.group === "unknown" ? "amber" : "gray";
+  const updated = record.updatedAt ? new Date(record.updatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "尚未更新";
+  return `
+    <tr data-candidate="${candidate.id}">
+      <td><div class="candidate-name"><span class="person-avatar">${candidate.name.slice(-1)}</span><div><strong>${candidate.name}</strong><span>${candidate.role}</span></div></div></td>
+      <td><span class="tag ${aiClass}">${candidate.verdict}</span></td>
+      <td><strong>${record.value || "待复核"}</strong></td>
+      <td class="tiny">${record.reasons.length ? record.reasons.slice(0, 2).join("、") : "尚未填写"}</td>
+      <td><span class="tag ${hiringStageClass(record.stage)}">${record.stage}</span></td>
+      <td class="tiny">${updated}</td>
+    </tr>`;
 }
 
 function metricCompareCard(label, ats, ai, detail) {
@@ -1683,6 +1856,7 @@ function renderCandidateDetail(candidateId) {
   const capabilityPoints = hrCapabilityPoints(c);
   const transferBoundary = transferBoundaryFor(c);
   const confidence = c.transferConfidence || (c.group === "priority" ? "中" : "低");
+  const record = candidateRecord(c.id);
   main.innerHTML = `
     <section class="page">
       <div class="page-head" style="padding-bottom:18px">
@@ -1736,14 +1910,26 @@ function renderCandidateDetail(candidateId) {
               <div class="card-body"><ol class="question-list">${c.questions.slice(0, 3).map(x => `<li>${x}</li>`).join("")}</ol></div>
             </div>
             <div class="card">
-              <div class="card-head"><div><h3>你的判断</h3></div></div>
+              <div class="card-head"><div><h3>HR 复核决策</h3><p>结论和理由将进入效果复盘</p></div></div>
               <div class="card-body">
-                <div class="decision-buttons">
-                  <button class="btn primary" data-decision="优先联系">标记为优先联系</button>
-                  <button class="btn secondary" data-decision="保留复核">保留复核</button>
-                  <button class="btn secondary" data-decision="暂不匹配">暂不匹配</button>
+                <div class="review-choice-grid">
+                  ${REVIEW_DECISIONS.map(value => `<label class="${record.value === value ? "selected" : ""}"><input type="radio" name="reviewDecision" value="${value}" ${record.value === value ? "checked" : ""}><span>${value}</span></label>`).join("")}
                 </div>
-                <textarea class="decision-note" id="decisionNote" placeholder="补充判断理由（选填）"></textarea>
+                <div class="field-label">判断理由（可多选）</div>
+                <div class="review-reason-grid">
+                  ${REVIEW_REASONS.map(reason => `<label><input type="checkbox" name="reviewReason" value="${reason}" ${record.reasons.includes(reason) ? "checked" : ""}><span>${reason}</span></label>`).join("")}
+                </div>
+                <textarea class="decision-note" id="decisionNote" placeholder="补充业务判断、风险或建议">${escapeHtml(record.note)}</textarea>
+                <button class="btn primary full-width" data-action="save-review-decision">保存复核决策</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><div><h3>招聘结果回填</h3><p>记录是否真正联系、面试和转化；Demo 数据保存在当前浏览器</p></div></div>
+              <div class="card-body outcome-form">
+                <label><span>当前招聘阶段</span><select id="hiringStage">${HIRING_STAGES.map(stage => `<option value="${stage}" ${record.stage === stage ? "selected" : ""}>${stage}</option>`).join("")}</select></label>
+                <label><span>跟进备注</span><textarea id="hiringStageNote" placeholder="例如：候选人愿意沟通，周五安排技术面">${escapeHtml(record.stageNote)}</textarea></label>
+                <button class="btn secondary full-width" data-action="save-hiring-outcome">保存招聘进展</button>
+                ${record.updatedAt ? `<small class="record-updated">最近更新：${new Date(record.updatedAt).toLocaleString("zh-CN")}</small>` : ""}
               </div>
             </div>
           </aside>
@@ -2310,26 +2496,32 @@ function csvCell(value) {
 
 function exportQueueCsv() {
   const job = currentJob();
-  const headers = ["候选人", "当前职位", "公司", "AI建议", "ATS结果", "AI新找回", "能力覆盖", "核心关联", "关键缺口", "人工判断"];
-  const rows = job.candidates.map(candidate => [
-    candidate.name,
-    candidate.role,
-    candidate.company,
-    candidate.verdict,
-    candidate.ats ? "关键词命中" : "未命中",
-    candidate.recovered ? "是" : "否",
-    `${candidate.coverage}%`,
-    candidate.core,
-    candidate.gap,
-    state.decisions[`${job.id}:${candidate.id}`]?.value || ""
-  ]);
+  const headers = ["候选人", "当前职位", "公司", "AI建议", "ATS结果", "AI新找回", "能力覆盖", "核心关联", "关键缺口", "HR复核决策", "判断理由", "招聘进展", "跟进备注"];
+  const rows = job.candidates.map(candidate => {
+    const record = candidateRecord(candidate.id, job.id);
+    return [
+      candidate.name,
+      candidate.role,
+      candidate.company,
+      candidate.verdict,
+      candidate.ats ? "关键词命中" : "未命中",
+      candidate.recovered ? "是" : "否",
+      `${candidate.coverage}%`,
+      candidate.core,
+      candidate.gap,
+      record.value,
+      record.reasons,
+      record.stage,
+      record.stageNote
+    ];
+  });
   const csv = [headers, ...rows].map(row => row.map(csvCell).join(",")).join("\r\n");
   downloadFile(`${safeFileName(job.title)}-候选人复核队列.csv`, csv, "text/csv;charset=utf-8");
 }
 
 function candidateReportMarkdown(candidate) {
   const job = currentJob();
-  const decision = state.decisions[`${job.id}:${candidate.id}`];
+  const decision = candidateRecord(candidate.id, job.id);
   const companyContext = companyContextFor(candidate);
   const companyResearch = candidate.companyResearch;
   const comparability = comparabilityFor(candidate);
@@ -2440,7 +2632,11 @@ ${candidate.questions.map((item, index) => `${index + 1}. ${item}`).join("\n")}
 
 ## HR 判断
 
-${decision ? `${decision.value}${decision.note ? `：${decision.note}` : ""}` : "尚未提交人工判断"}
+${`- 复核结论：${decision.value || "尚未提交"}
+- 判断理由：${decision.reasons.join("、") || "未填写"}
+- 补充说明：${decision.note || "无"}
+- 招聘进展：${decision.stage}
+- 跟进备注：${decision.stageNote || "无"}`}
 
 ---
 
@@ -2451,12 +2647,12 @@ ${decision ? `${decision.value}${decision.note ? `：${decision.note}` : ""}` : 
 function evaluationExportData() {
   const job = currentJob();
   const metrics = getEvaluationMetrics(job);
+  const business = getBusinessMetrics(job);
   return {
     generatedAt: new Date().toISOString(),
     job: { id: job.id, title: job.title, industry: job.industry, businessContext: job.businessContext || "" },
     methodology: {
-      note: "召回率和精确率仅使用已完成人工标注的候选人计算",
-      averageManualReviewMinutes: 2.5
+      note: "召回率和精确率仅使用已完成人工标注的候选人计算；招聘漏斗来自 HR 实际回填"
     },
     metrics: {
       totalCandidates: job.candidates.length,
@@ -2466,26 +2662,43 @@ function evaluationExportData() {
       aiRecall: metrics.aiRecall,
       atsPrecision: metrics.atsPrecision,
       aiPrecision: metrics.aiPrecision,
-      aiRecovered: metrics.recovered.length
+      aiRecovered: metrics.recovered.length,
+      reviewedCandidates: business.reviewed.length,
+      recommendedCandidates: business.recommended.length,
+      contactedCandidates: business.contacted.length,
+      interviewedCandidates: business.interviewed.length,
+      offerCandidates: business.offers.length,
+      hiredCandidates: business.hired.length,
+      recoveredRecommended: business.recoveredRecommended.length,
+      recoveredInterviewed: business.recoveredInterviewed.length
     },
-    candidates: job.candidates.map(candidate => ({
-      name: candidate.name,
-      role: candidate.role,
-      company: candidate.company,
-      atsMatched: candidate.ats,
-      aiVerdict: candidate.verdict,
-      aiRecovered: candidate.recovered,
-      evidenceCoverage: candidate.coverage,
-      humanLabel: evaluationFor(candidate),
-      core: candidate.core,
-      gap: candidate.gap
-    }))
+    candidates: job.candidates.map(candidate => {
+      const record = candidateRecord(candidate.id, job.id);
+      return {
+        name: candidate.name,
+        role: candidate.role,
+        company: candidate.company,
+        atsMatched: candidate.ats,
+        aiVerdict: candidate.verdict,
+        aiRecovered: candidate.recovered,
+        evidenceCoverage: candidate.coverage,
+        humanLabel: evaluationFor(candidate, job.id),
+        reviewDecision: record.value,
+        reviewReasons: record.reasons,
+        reviewNote: record.note,
+        hiringStage: record.stage,
+        hiringStageNote: record.stageNote,
+        updatedAt: record.updatedAt,
+        core: candidate.core,
+        gap: candidate.gap
+      };
+    })
   };
 }
 
 function exportEvaluationCsv() {
   const data = evaluationExportData();
-  const headers = ["候选人", "当前职位", "公司", "ATS命中", "AI建议", "AI新找回", "证据覆盖", "人工标准答案", "核心关联", "关键缺口"];
+  const headers = ["候选人", "当前职位", "公司", "ATS命中", "AI建议", "AI新找回", "证据覆盖", "人工标准答案", "HR复核决策", "判断理由", "招聘进展", "跟进备注", "核心关联", "关键缺口"];
   const labels = { relevant: "合理候选人", irrelevant: "不合适", unknown: "待确认" };
   const rows = data.candidates.map(candidate => [
     candidate.name,
@@ -2496,6 +2709,10 @@ function exportEvaluationCsv() {
     candidate.aiRecovered ? "是" : "否",
     `${candidate.evidenceCoverage}%`,
     labels[candidate.humanLabel],
+    candidate.reviewDecision,
+    candidate.reviewReasons,
+    candidate.hiringStage,
+    candidate.hiringStageNote,
     candidate.core,
     candidate.gap
   ]);
@@ -2506,7 +2723,10 @@ function exportEvaluationCsv() {
     ["AI 召回率", `${data.metrics.aiRecall}%`],
     ["ATS 精确率", `${data.metrics.atsPrecision}%`],
     ["AI 精确率", `${data.metrics.aiPrecision}%`],
-    ["AI 增量找回", data.metrics.aiRecovered]
+    ["AI 增量找回", data.metrics.aiRecovered],
+    ["HR 已推荐联系", data.metrics.recommendedCandidates],
+    ["已进入面试", data.metrics.interviewedCandidates],
+    ["AI 增量找回且进入面试", data.metrics.recoveredInterviewed]
   ];
   const csv = [[headers, ...rows], metricRows].flat().map(row => row.map(csvCell).join(",")).join("\r\n");
   downloadFile(`${safeFileName(data.job.title)}-ATS与AI效果评估.csv`, csv, "text/csv;charset=utf-8");
@@ -2647,15 +2867,6 @@ function handleClick(event) {
     return;
   }
 
-  const decision = event.target.closest("[data-decision]");
-  if (decision) {
-    const note = document.getElementById("decisionNote")?.value.trim() || "";
-    state.decisions[`${state.currentJob}:${state.selectedCandidate}`] = { value: decision.dataset.decision, note };
-    saveState();
-    toast("已记录你的判断", `${decision.dataset.decision} · 当前岗位排序偏好已更新`);
-    return;
-  }
-
   const evaluation = event.target.closest("[data-evaluation]");
   if (evaluation) {
     state.evaluations[`${state.currentJob}:${evaluation.dataset.candidateId}`] = evaluation.dataset.evaluation;
@@ -2683,13 +2894,42 @@ function handleClick(event) {
   if (action === "toggle-account-menu") toggleAccountMenu();
   if (action === "close-account-menu") toggleAccountMenu(false);
   if (action === "save-account-profile") saveAccountProfile();
+  if (action === "save-review-decision") {
+    const value = document.querySelector('input[name="reviewDecision"]:checked')?.value || "";
+    const reasons = [...document.querySelectorAll('input[name="reviewReason"]:checked')].map(input => input.value);
+    const note = document.getElementById("decisionNote")?.value.trim() || "";
+    if (!value) {
+      toast("请选择复核结论", "先判断推荐联系、暂缓、不合适或信息不足");
+      return;
+    }
+    if (!reasons.length) {
+      toast("请选择至少一个判断理由", "结构化理由会用于后续效果复盘");
+      return;
+    }
+    const existing = candidateRecord(state.selectedCandidate);
+    const stage = value === "推荐联系" && existing.stage === "未跟进" ? "待联系" : existing.stage;
+    saveCandidateRecord(state.selectedCandidate, { value, reasons, note, stage });
+    state.evaluations[`${state.currentJob}:${state.selectedCandidate}`] = decisionEvaluation(value);
+    saveState();
+    renderCandidateDetail(state.selectedCandidate);
+    toast("复核决策已保存", `${value} · 已纳入效果复盘`);
+    return;
+  }
+  if (action === "save-hiring-outcome") {
+    const stage = document.getElementById("hiringStage")?.value || "未跟进";
+    const stageNote = document.getElementById("hiringStageNote")?.value.trim() || "";
+    saveCandidateRecord(state.selectedCandidate, { stage, stageNote });
+    renderCandidateDetail(state.selectedCandidate);
+    toast("招聘进展已更新", `${stage} · 转化漏斗已重新计算`);
+    return;
+  }
   if (action === "open-insight-candidate") {
     state.currentJob = actionEl.dataset.jobId;
     state.selectedCandidate = actionEl.dataset.candidateId;
     renderCandidateDetail(state.selectedCandidate);
   }
   if (action === "open-insight-queue") {
-    const targetJob = Object.values(jobs).find(job => state.imported[job.id] && job.candidates.some(candidate => ["review", "unknown"].includes(candidate.group)))
+    const targetJob = Object.values(jobs).find(job => state.imported[job.id] && job.candidates.some(candidate => !candidateRecord(candidate.id, job.id).value))
       || currentJob();
     state.currentJob = targetJob.id;
     state.filter = "all";
@@ -2732,7 +2972,8 @@ function handleClick(event) {
   if (action === "show-compare") showCompare();
   if (action === "copy-evaluation") {
     const metrics = getEvaluationMetrics(currentJob());
-    const summary = `岗位：${currentJob().title}\nATS 召回率：${metrics.atsRecall}%\nAI 召回率：${metrics.aiRecall}%\nATS 精确率：${metrics.atsPrecision}%\nAI 精确率：${metrics.aiPrecision}%\nAI 增量找回：${metrics.recovered.length} 人`;
+    const business = getBusinessMetrics(currentJob());
+    const summary = `岗位：${currentJob().title}\nHR 已复核：${business.reviewed.length} 人\n推荐联系：${business.recommended.length} 人\n进入面试：${business.interviewed.length} 人\nOffer：${business.offers.length} 人\nAI 增量找回且进入面试：${business.recoveredInterviewed.length} 人\nATS 召回率：${metrics.atsRecall}%\nAI 召回率：${metrics.aiRecall}%\nATS 精确率：${metrics.atsPrecision}%\nAI 精确率：${metrics.aiPrecision}%`;
     navigator.clipboard?.writeText(summary);
     toast("评估摘要已复制", "可直接粘贴到方案说明或演示稿");
   }

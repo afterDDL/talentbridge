@@ -345,10 +345,10 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .progress i { display: block; height: 100%; border-radius: inherit; background: var(--blue); transition: width .4s; }
 
 .queue-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-.filter-tabs { display: flex; align-items: center; gap: 3px; padding: 3px; border-radius: 7px; background: #e9ebee; }
+.filter-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; padding: 3px; border-radius: 7px; background: #e9ebee; }
 .filter-tabs button { padding: 6px 11px; border: 0; border-radius: 5px; background: transparent; color: var(--text-2); cursor: pointer; font-size: 12px; }
 .filter-tabs button.active { background: white; color: var(--text); box-shadow: 0 1px 3px rgba(31,35,41,.08); }
-.queue-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.queue-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .stat-card { padding: 14px 16px; }
 .stat-card p { margin: 0; color: var(--text-2); font-size: 12px; }
 .stat-card strong { display: block; margin: 8px 0 3px; font-size: 22px; }
@@ -414,6 +414,27 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .evaluation-options button.selected.irrelevant { border-color: #e4aaa6; background: var(--red-soft); color: #b52b25; }
 .evaluation-options button.selected.unknown { border-color: #e6c08c; background: var(--amber-soft); color: #9a5109; }
 .evaluation-footnote { margin: 14px 0 0; color: var(--text-3); font-size: 11px; text-align: center; }
+.business-funnel-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+.business-outcome-card { position: relative; overflow: hidden; padding: 16px 17px; }
+.business-outcome-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--blue); }
+.business-outcome-card.cyan::before { background: var(--cyan); }
+.business-outcome-card.purple::before { background: var(--purple); }
+.business-outcome-card.green::before { background: var(--green); }
+.business-outcome-card span, .business-outcome-card strong, .business-outcome-card p { display: block; }
+.business-outcome-card span { color: var(--text-2); font-size: 11px; font-weight: 600; }
+.business-outcome-card strong { margin-top: 8px; font-size: 27px; }
+.business-outcome-card p { margin: 4px 0 0; color: var(--text-3); font-size: 10px; line-height: 1.45; }
+.outcome-insight-card { display: flex; align-items: center; justify-content: space-between; gap: 22px; margin-bottom: 14px; padding: 17px 19px; border-color: #cddcff; background: linear-gradient(135deg, #f7f9ff, #fff); }
+.outcome-insight-card > div:first-child { min-width: 0; }
+.outcome-insight-card > div:first-child strong, .outcome-insight-card > div:first-child span { display: block; }
+.outcome-insight-card > div:first-child strong { margin-top: 5px; font-size: 15px; line-height: 1.5; }
+.outcome-insight-card > div:first-child span { margin-top: 4px; color: var(--text-3); font-size: 10px; }
+.outcome-mini-metrics { display: flex; flex: 0 0 auto; gap: 8px; }
+.outcome-mini-metrics p { min-width: 74px; margin: 0; padding: 9px 11px; border-radius: 6px; background: white; text-align: center; box-shadow: 0 0 0 1px var(--line-soft); }
+.outcome-mini-metrics strong, .outcome-mini-metrics span { display: block; }
+.outcome-mini-metrics strong { font-size: 18px; }
+.outcome-mini-metrics span { margin-top: 3px; color: var(--text-3); font-size: 9px; }
+.feedback-table td { cursor: pointer; }
 
 .detail-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(350px, .65fr); gap: 18px; }
 .decision-page-grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; align-items: start; }
@@ -554,6 +575,28 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .decision-buttons .btn:first-child { grid-column: 1 / -1; }
 .decision-note { width: 100%; min-height: 78px; margin: 10px 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; outline: none; resize: vertical; }
 .decision-note:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(51,112,255,.12); }
+.candidate-progress { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.candidate-progress strong { font-size: 11px; }
+.candidate-progress small { color: var(--text-3); font-size: 9px; }
+.review-choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.review-choice-grid label { cursor: pointer; }
+.review-choice-grid input { position: absolute; opacity: 0; pointer-events: none; }
+.review-choice-grid span { display: block; padding: 8px 7px; border: 1px solid var(--line); border-radius: 6px; color: var(--text-2); font-size: 10px; text-align: center; }
+.review-choice-grid label:has(input:checked) span { border-color: var(--blue); background: var(--blue-soft); color: #245bdb; font-weight: 600; }
+.field-label { margin: 13px 0 7px; color: var(--text-2); font-size: 10px; font-weight: 600; }
+.review-reason-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.review-reason-grid label { display: flex; align-items: flex-start; gap: 5px; padding: 6px 7px; border: 1px solid var(--line-soft); border-radius: 5px; color: var(--text-2); cursor: pointer; font-size: 9px; line-height: 1.35; }
+.review-reason-grid label:has(input:checked) { border-color: #b9cbff; background: #f3f6ff; color: #245bdb; }
+.review-reason-grid input { flex: 0 0 auto; margin: 1px 0 0; accent-color: var(--blue); }
+.full-width { width: 100%; }
+.outcome-form label, .outcome-form label > span { display: block; }
+.outcome-form label + label { margin-top: 10px; }
+.outcome-form label > span { margin-bottom: 6px; color: var(--text-2); font-size: 10px; font-weight: 600; }
+.outcome-form select, .outcome-form textarea { width: 100%; padding: 8px 9px; border: 1px solid var(--line); border-radius: 6px; outline: none; color: var(--text); }
+.outcome-form textarea { min-height: 66px; resize: vertical; }
+.outcome-form select:focus, .outcome-form textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(51,112,255,.1); }
+.outcome-form .btn { margin-top: 10px; }
+.record-updated { display: block; margin-top: 8px; color: var(--text-3); font-size: 9px; text-align: center; }
 .resume-entry::before { content: "▤"; margin-right: 6px; color: var(--blue); font-size: 13px; }
 
 .modal-backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 30px; background: rgba(31,35,41,.38); z-index: 100; }
@@ -704,6 +747,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 @media (max-width: 1280px) {
   .content-grid { grid-template-columns: minmax(0, 1fr) 300px; }
   .decision-page-grid { grid-template-columns: minmax(0, 1fr) 300px; }
+  .business-funnel-grid { grid-template-columns: 1fr 1fr; }
+  .outcome-insight-card { align-items: flex-start; flex-direction: column; }
   .industry-fact-grid { grid-template-columns: 1fr 1fr; }
   .operating-structure > div { grid-template-columns: 1fr 1fr; }
   .migration-map { grid-template-columns: 1fr 32px 1.1fr 32px 1fr; }
