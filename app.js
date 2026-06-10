@@ -947,9 +947,40 @@ function renderRequirement() {
               <div class="card-body">
                 <ul>
                   <li>${job.summary}</li>
-                  <li>识别到 ${job.model.length} 项关键能力，其中 3 项建议设为必须。</li>
+                  <li>识别到 ${job.model.length} 项关键能力，其中 ${job.model.filter(item => item[2] === "必须").length} 项建议设为必须。</li>
                   <li>发现 ${job.adjacent.length} 类可能具备迁移价值的相邻经历。</li>
                 </ul>
+                <details class="job-understanding-details">
+                  <summary><span>展开查看并编辑具体内容</span><small>修改后将用于候选人分析</small></summary>
+                  <div class="job-understanding-editor">
+                    <label class="understanding-summary">
+                      <span>岗位真正要解决的问题</span>
+                      <textarea id="jobUnderstandingSummary" rows="3">${escapeHtml(job.summary)}</textarea>
+                    </label>
+                    <section>
+                      <header>
+                        <div><strong>关键能力</strong><small>${job.model.length} 项，其中 ${job.model.filter(item => item[2] === "必须").length} 项必须</small></div>
+                        <button class="btn ghost small" data-action="add-capability">＋ 添加能力</button>
+                      </header>
+                      <div class="model-list" id="jobUnderstandingModelList">
+                        ${job.model.map((item, index) => modelItem(item, index)).join("")}
+                      </div>
+                    </section>
+                    <section>
+                      <header>
+                        <div><strong>可接受的相邻经历</strong><small>${job.adjacent.length} 类，用于扩大合理召回</small></div>
+                        <button class="btn ghost small" data-action="add-adjacent">＋ 添加经历</button>
+                      </header>
+                      <div class="adjacent-edit-list" id="jobUnderstandingAdjacentList">
+                        ${job.adjacent.map((item, index) => adjacentEditItem(item, index)).join("")}
+                      </div>
+                    </section>
+                    <div class="understanding-actions">
+                      <p>模糊业务判断会作为分析视角，不会自动成为淘汰条件。</p>
+                      <button class="btn primary small" data-action="save-job-understanding">保存岗位理解</button>
+                    </div>
+                  </div>
+                </details>
               </div>
             </div>
             <div class="card">
@@ -986,8 +1017,8 @@ function renderCalibration() {
                 ${job.model.map((item, index) => modelItem(item, index)).join("")}
               </div>
               <div style="margin-top:16px;padding:12px;border-radius:6px;background:#f7f9fd">
-                <p style="margin:0 0 8px;font-weight:500;font-size:12px">可接受的相邻经历</p>
-                <div class="choice-row">${job.adjacent.map(x => `<button class="choice selected">${x} <span>×</span></button>`).join("")}<button class="choice" data-action="add-adjacent">＋ 添加</button></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px"><p style="margin:0;font-weight:500;font-size:12px">可接受的相邻经历</p><button class="btn ghost small" data-action="add-adjacent">＋ 添加</button></div>
+                <div class="adjacent-edit-list" id="calibrationAdjacentList">${job.adjacent.map((item, index) => adjacentEditItem(item, index)).join("")}</div>
               </div>
             </div>
           </div>
@@ -1033,6 +1064,14 @@ function modelItem(item, index) {
       <div class="model-main"><strong contenteditable="true">${escapeHtml(item[0])}</strong><span contenteditable="true">${escapeHtml(item[1])}</span></div>
       <select class="priority-select"><option ${item[2] === "必须" ? "selected" : ""}>必须</option><option ${item[2] === "重要" ? "selected" : ""}>重要</option><option ${item[2] === "加分" ? "selected" : ""}>加分</option></select>
       <button class="delete-btn" data-action="delete-capability" data-index="${index}" title="删除">×</button>
+    </div>`;
+}
+
+function adjacentEditItem(item, index) {
+  return `
+    <div class="adjacent-edit-item" data-adjacent-index="${index}">
+      <span contenteditable="true">${escapeHtml(item)}</span>
+      <button class="delete-btn" data-action="delete-adjacent" title="删除">×</button>
     </div>`;
 }
 
@@ -2406,7 +2445,39 @@ function saveModelFromPage() {
       row.querySelector("select")?.value || "重要"
     ];
   });
+  const adjacentRows = [...document.querySelectorAll("#calibrationAdjacentList .adjacent-edit-item")];
+  if (adjacentRows.length) {
+    job.adjacent = adjacentRows
+      .map(row => row.querySelector("[contenteditable='true']")?.textContent.trim())
+      .filter(Boolean);
+  }
   saveState();
+}
+
+function saveJobUnderstandingFromPage() {
+  const job = currentJob();
+  const summary = document.getElementById("jobUnderstandingSummary")?.value.trim();
+  const rows = [...document.querySelectorAll("#jobUnderstandingModelList .model-item")];
+  const adjacentRows = [...document.querySelectorAll("#jobUnderstandingAdjacentList .adjacent-edit-item")];
+  if (!rows.length) {
+    toast("请至少保留一项关键能力");
+    return;
+  }
+  if (summary) job.summary = summary;
+  job.model = rows.map(row => {
+    const texts = row.querySelectorAll("[contenteditable='true']");
+    return [
+      texts[0]?.textContent.trim() || "未命名能力",
+      texts[1]?.textContent.trim() || "待补充说明",
+      row.querySelector("select")?.value || "重要"
+    ];
+  });
+  job.adjacent = adjacentRows
+    .map(row => row.querySelector("[contenteditable='true']")?.textContent.trim())
+    .filter(Boolean);
+  saveState();
+  renderRequirement();
+  toast("岗位理解已保存", "能力数量、必须项和相邻经历已更新");
 }
 
 function enterJdEditMode() {
@@ -2598,9 +2669,20 @@ function handleClick(event) {
     toast("能力项已移除", "仅影响当前岗位模型");
   }
   if (action === "add-capability") {
-    document.getElementById("modelList")?.insertAdjacentHTML("beforeend", modelItem(["新增能力项", "点击文字即可编辑说明", "重要"], Date.now()));
+    const target = actionEl.closest(".job-understanding-editor")
+      ? document.getElementById("jobUnderstandingModelList")
+      : document.getElementById("modelList");
+    target?.insertAdjacentHTML("beforeend", modelItem(["新增能力项", "点击文字即可编辑说明", "重要"], Date.now()));
   }
-  if (action === "add-adjacent") toast("原型交互提示", "这里可搜索并添加相邻岗位、行业或技术方向");
+  if (action === "add-adjacent") {
+    const target = document.getElementById("jobUnderstandingAdjacentList") || document.getElementById("calibrationAdjacentList");
+    if (target) {
+      target.insertAdjacentHTML("beforeend", adjacentEditItem("新增相邻经历", Date.now()));
+      target.lastElementChild?.querySelector("[contenteditable='true']")?.focus();
+    }
+  }
+  if (action === "delete-adjacent") actionEl.closest(".adjacent-edit-item")?.remove();
+  if (action === "save-job-understanding") saveJobUnderstandingFromPage();
   if (action === "save-knowledge-pack") {
     const pack = readKnowledgePackFromPage();
     if (pack) {

@@ -237,6 +237,27 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .ai-summary { position: relative; overflow: hidden; }
 .ai-summary::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--purple); }
 .ai-summary ul { margin: 0; padding-left: 18px; color: var(--text-2); line-height: 1.7; font-size: 13px; }
+.job-understanding-details { margin-top: 14px; border-top: 1px solid var(--line-soft); }
+.job-understanding-details summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 0 2px; color: var(--blue); font-size: 12px; font-weight: 600; cursor: pointer; list-style-position: inside; }
+.job-understanding-details summary small { color: var(--text-3); font-size: 10px; font-weight: 400; }
+.job-understanding-editor { display: grid; gap: 16px; margin-top: 12px; padding: 14px; border: 1px solid #ddd5f6; border-radius: 7px; background: #fcfbff; }
+.understanding-summary span { display: block; margin-bottom: 7px; font-size: 11px; font-weight: 600; }
+.understanding-summary textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; outline: none; resize: vertical; line-height: 1.6; }
+.understanding-summary textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(51,112,255,.1); }
+.job-understanding-editor section > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.job-understanding-editor section > header strong, .job-understanding-editor section > header small { display: block; }
+.job-understanding-editor section > header strong { font-size: 12px; }
+.job-understanding-editor section > header small { margin-top: 3px; color: var(--text-3); font-size: 10px; }
+.job-understanding-editor .model-item { grid-template-columns: minmax(0, 1fr) 68px 28px; padding: 9px; }
+.job-understanding-editor .model-main span { white-space: normal; }
+.adjacent-edit-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.adjacent-edit-item { display: grid; grid-template-columns: minmax(0, 1fr) 28px; gap: 6px; align-items: center; padding: 7px 8px; border: 1px solid var(--line-soft); border-radius: 6px; background: white; }
+.adjacent-edit-item > span { padding: 3px 4px; color: var(--text-2); font-size: 11px; line-height: 1.5; outline: none; }
+.adjacent-edit-item > span:focus { border-radius: 4px; background: var(--blue-soft); }
+.understanding-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.understanding-actions p { margin: 0; color: var(--text-3); font-size: 10px; line-height: 1.5; }
+.ai-summary .adjacent-edit-list { grid-template-columns: 1fr; }
+.ai-summary .understanding-actions { align-items: stretch; flex-direction: column; }
 .calibration-item { padding: 13px 0; border-bottom: 1px solid var(--line-soft); }
 .calibration-item:last-child { border: 0; padding-bottom: 0; }
 .calibration-item > label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 13px; }
