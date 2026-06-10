@@ -718,7 +718,7 @@ function renderCreateProject() {
               <label class="field"><span>行业 / 业务方向 *</span><input id="newJobIndustry" required placeholder="例如：新能源汽车 · 供应链"></label>
             </div>
             <label class="field"><span>岗位 JD *</span><textarea id="newJobJd" required rows="12" placeholder="粘贴岗位职责和任职要求……"></textarea></label>
-            <label class="field business-context-field"><span>你对这项业务的理解</span><textarea id="newJobBusinessContext" rows="5" placeholder="可以通俗、碎片或笼统一点。例如：我们要做的是 NPU 架构的边缘加速推理芯片。"></textarea><small>AI 会把它作为分析视角，理解真正的产品方向和业务任务；不会直接把模糊表述当成淘汰条件。</small></label>
+            <label class="field business-context-field"><span>你对这项业务的理解</span><textarea id="newJobBusinessContext" rows="5" placeholder="可以通俗、碎片或笼统一点。例如：我们要做的是面向图像模型的 GPU 加速架构。"></textarea><small>AI 会把它作为分析视角，理解真正的产品方向和业务任务；不会直接把模糊表述当成淘汰条件。</small></label>
             <label class="field"><span>招聘经理补充</span><textarea id="newJobNote" rows="4" placeholder="例如：必须有复杂供应商管理经验；消费电子背景也可以接受。"></textarea></label>
             <div class="privacy-tip"><span>AI</span><p><strong>生成逻辑</strong><br>当前 Demo 会根据 JD 中的任务表达生成可编辑能力模型，不会把年龄、性别等敏感属性纳入判断。</p></div>
           </div>
@@ -2488,7 +2488,7 @@ function enterJdEditMode() {
   box.outerHTML = `
     <div class="job-input-editors">
       <label><span>岗位 JD</span><textarea class="paste-area jd-editor" id="jdEditor">${escapeHtml(job.jdText || fallback)}</textarea></label>
-      <label><span>HR 对业务的理解</span><textarea class="paste-area business-context-editor" id="businessContextEditor" placeholder="例如：我们要做的是 NPU 架构的边缘加速推理芯片。">${escapeHtml(job.businessContext || "")}</textarea><small>可以使用业务口语、碎片信息或尚未完全确定的方向。</small></label>
+      <label><span>HR 对业务的理解</span><textarea class="paste-area business-context-editor" id="businessContextEditor" placeholder="例如：我们要做的是面向图像模型的 GPU 加速架构。">${escapeHtml(job.businessContext || "")}</textarea><small>可以使用业务口语、碎片信息或尚未完全确定的方向。</small></label>
     </div>`;
   document.querySelector(".business-context-box")?.remove();
   const actions = document.querySelector(".job-input-editors")?.nextElementSibling;
