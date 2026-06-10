@@ -29,13 +29,29 @@
         <div class="top-actions">
           <span class="ai-mode" id="aiMode"><i></i><span>检测 AI 服务</span></span>
           <button class="icon-btn" title="帮助" aria-label="帮助" data-action="show-guide">?</button>
-          <button class="icon-btn notification" title="通知" aria-label="通知">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
-            </svg>
-            <span></span>
-          </button>
-          <button class="avatar" title="个人中心">林</button>
+          <div class="account-control">
+            <button class="avatar" id="accountButton" title="账户菜单" aria-label="打开账户菜单" aria-expanded="false" data-action="toggle-account-menu">演</button>
+            <section class="account-menu hidden" id="accountMenu" aria-label="账户菜单">
+              <header>
+                <span class="account-menu-avatar" id="accountMenuAvatar">演</span>
+                <div><strong id="accountMenuName">演示用户</strong><small>演示用户 · 本机配置</small></div>
+              </header>
+              <label>
+                <span>显示名称</span>
+                <input id="accountNameInput" maxlength="20" value="演示用户" placeholder="输入你的名称" />
+              </label>
+              <label>
+                <span>个性化招聘背景</span>
+                <textarea id="accountContextInput" rows="5" maxlength="500" placeholder="例如：我是大型互联网公司前端高端岗位的猎聘者。"></textarea>
+                <small>AI 会结合你的岗位职责、公司类型和招聘场景调整分析角度，但不会用这段背景替代简历证据。</small>
+              </label>
+              <div class="account-privacy-note">保存在当前浏览器；使用真实 AI 时会随分析请求发送给模型服务。</div>
+              <footer>
+                <button class="btn ghost small" data-action="close-account-menu">取消</button>
+                <button class="btn primary small" data-action="save-account-profile">保存个性化设置</button>
+              </footer>
+            </section>
+          </div>
         </div>
       </header>
 

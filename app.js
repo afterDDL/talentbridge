@@ -253,7 +253,11 @@ const state = {
   decisions: {},
   evaluations: {},
   deletedCandidates: {},
-  selectedKnowledgePack: "advanced-packaging"
+  selectedKnowledgePack: "advanced-packaging",
+  userProfile: {
+    name: "演示用户",
+    context: ""
+  }
 };
 
 const STORAGE_KEY = "talentbridge-demo-state-v1";
@@ -271,6 +275,12 @@ function loadSavedState() {
     if (saved.imported) state.imported = { ...state.imported, ...saved.imported };
     if (saved.decisions) state.decisions = saved.decisions;
     if (saved.evaluations) state.evaluations = saved.evaluations;
+    if (saved.userProfile && typeof saved.userProfile === "object") {
+      state.userProfile = {
+        name: String(saved.userProfile.name || "演示用户").slice(0, 20),
+        context: String(saved.userProfile.context || "").slice(0, 500)
+      };
+    }
     if (typeof saved.privacyMode === "boolean") state.privacyMode = saved.privacyMode;
     if (saved.deletedCandidates) state.deletedCandidates = saved.deletedCandidates;
     if (saved.knowledgePacks) {
@@ -319,6 +329,7 @@ function saveState() {
     imported: state.imported,
     decisions: state.decisions,
     evaluations: state.evaluations,
+    userProfile: state.userProfile,
     privacyMode: state.privacyMode,
     deletedCandidates: state.deletedCandidates,
     knowledgePacks,
@@ -459,6 +470,55 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, char => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
   })[char]);
+}
+
+function userAnalysisContext() {
+  return {
+    displayName: state.userProfile.name || "演示用户",
+    recruiterContext: state.userProfile.context || ""
+  };
+}
+
+function accountInitial(name = state.userProfile.name) {
+  return String(name || "演示用户").trim().slice(0, 1) || "演";
+}
+
+function syncAccountUi() {
+  const name = state.userProfile.name || "演示用户";
+  const initial = accountInitial(name);
+  const button = document.getElementById("accountButton");
+  const menuName = document.getElementById("accountMenuName");
+  const menuAvatar = document.getElementById("accountMenuAvatar");
+  const nameInput = document.getElementById("accountNameInput");
+  const contextInput = document.getElementById("accountContextInput");
+  if (button) button.textContent = initial;
+  if (menuName) menuName.textContent = name;
+  if (menuAvatar) menuAvatar.textContent = initial;
+  if (nameInput) nameInput.value = name;
+  if (contextInput) contextInput.value = state.userProfile.context || "";
+}
+
+function toggleAccountMenu(forceOpen = null) {
+  const menu = document.getElementById("accountMenu");
+  const button = document.getElementById("accountButton");
+  if (!menu || !button) return;
+  const shouldOpen = forceOpen === null ? menu.classList.contains("hidden") : forceOpen;
+  if (shouldOpen) syncAccountUi();
+  menu.classList.toggle("hidden", !shouldOpen);
+  button.setAttribute("aria-expanded", String(shouldOpen));
+}
+
+function saveAccountProfile() {
+  const name = document.getElementById("accountNameInput")?.value.trim() || "演示用户";
+  const context = document.getElementById("accountContextInput")?.value.trim() || "";
+  state.userProfile = {
+    name: name.slice(0, 20),
+    context: context.slice(0, 500)
+  };
+  saveState();
+  syncAccountUi();
+  toggleAccountMenu(false);
+  toast("个性化设置已保存", context ? "后续 AI 分析会结合你的招聘背景" : "当前仅使用岗位和简历信息");
 }
 
 function toast(title, detail = "") {
@@ -1904,6 +1964,7 @@ function analysisJobPayload(job) {
     jdText: job.jdText || "",
     businessContext: job.businessContext || "",
     note: job.note || "",
+    userContext: userAnalysisContext(),
     model: job.model,
     adjacent: job.adjacent,
     knowledgePack: buildKnowledgeContext(job)
@@ -2532,7 +2593,8 @@ async function saveEditedJd() {
       industry: job.industry,
       jd: text,
       businessContext,
-      note: job.note || ""
+      note: job.note || "",
+      userContext: userAnalysisContext()
     });
     job.summary = data.result.summary;
     job.model = data.result.capabilities.map(item => [item.name, item.description, item.priority]);
@@ -2618,6 +2680,9 @@ function handleClick(event) {
   if (action === "go-workbench") renderWorkbench();
   if (action === "open-current") renderRequirement();
   if (action === "open-project") { state.currentJob = actionEl.dataset.job; renderRequirement(); }
+  if (action === "toggle-account-menu") toggleAccountMenu();
+  if (action === "close-account-menu") toggleAccountMenu(false);
+  if (action === "save-account-profile") saveAccountProfile();
   if (action === "open-insight-candidate") {
     state.currentJob = actionEl.dataset.jobId;
     state.selectedCandidate = actionEl.dataset.candidateId;
@@ -2782,6 +2847,14 @@ function handleClick(event) {
 
 document.addEventListener("click", handleClick);
 document.addEventListener("click", event => {
+  const menu = document.getElementById("accountMenu");
+  if (!menu || menu.classList.contains("hidden") || event.target.closest(".account-control")) return;
+  toggleAccountMenu(false);
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") toggleAccountMenu(false);
+});
+document.addEventListener("click", event => {
   const nav = event.target.closest("[data-nav]");
   if (!nav) return;
   if (nav.dataset.nav === "workbench") renderWorkbench();
@@ -2808,7 +2881,7 @@ document.addEventListener("submit", async event => {
   let job;
   let mode = "demo";
   try {
-    const data = await apiRequest("/api/analyze-job", { title, industry, jd: jdText, businessContext, note });
+    const data = await apiRequest("/api/analyze-job", { title, industry, jd: jdText, businessContext, note, userContext: userAnalysisContext() });
     const result = data.result;
     job = {
       id: `job-${Date.now()}`,
@@ -2879,6 +2952,7 @@ document.querySelector(".top-search input").addEventListener("keydown", event =>
 });
 
 loadSavedState();
+syncAccountUi();
 void migrateLegacyResumeStorage();
 renderWorkbench();
 detectAiMode();

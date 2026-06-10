@@ -703,7 +703,7 @@ function fallbackIndustryResearchPlan(job) {
 
 async function buildIndustryResearchPlan(job) {
   const fallback = fallbackIndustryResearchPlan(job);
-  const cacheKey = JSON.stringify([job.title, job.industry, job.jdText, job.businessContext, job.model, job.adjacent]);
+  const cacheKey = JSON.stringify([job.title, job.industry, job.jdText, job.businessContext, job.userContext, job.model, job.adjacent]);
   const cached = industryResearchPlanCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < COMPANY_RESEARCH_TTL_MS) return cached.plan;
   if (!API_KEY) return fallback;
@@ -724,6 +724,7 @@ async function buildIndustryResearchPlan(job) {
         industry: job.industry,
         jdText: job.jdText,
         businessContext: job.businessContext,
+        userContext: job.userContext,
         model: job.model,
         adjacent: job.adjacent
       })
@@ -1440,7 +1441,7 @@ async function researchCompany(payload) {
     return insufficientCompanyResearch(company || "未说明", "简历未提供可检索的企业名称");
   }
   const researchPlan = await buildIndustryResearchPlan(job);
-  const cacheKey = `${company}::${job.title || ""}::${[...researchPlan.coreTerms, ...researchPlan.englishTerms].join("|")}`;
+  const cacheKey = `${company}::${job.title || ""}::${job.userContext?.recruiterContext || ""}::${[...researchPlan.coreTerms, ...researchPlan.englishTerms].join("|")}`;
   const cached = companyResearchCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < COMPANY_RESEARCH_TTL_MS) return cached.result;
 
@@ -1480,7 +1481,7 @@ async function researchCompany(payload) {
     name: "industry_research_skill",
     schema: companyResearchSchema,
     system: industryResearchSkill.SYSTEM_PROMPT,
-    input: `简历所列企业：${company}\n候选人岗位：${payload.role || "未说明"}\n目标岗位：${JSON.stringify(job)}\n动态行业研究计划：${JSON.stringify(researchPlan)}\n预识别关联主体：${JSON.stringify(researchBundle.resolvedEntities)}\n\n先判断输入名称是集团、法律实体、业务统称、业务单元还是品牌；再根据目标 JD 从有来源支持的关联主体中选择重点研究主体。重点研究主体可以与简历所列名称不同，但不得据此确认候选人的雇佣关系。\n\n公开网页：\n${sourceInput}`
+    input: `简历所列企业：${company}\n候选人岗位：${payload.role || "未说明"}\n目标岗位：${JSON.stringify(job)}\n使用者招聘背景：${JSON.stringify(job.userContext || {})}\n动态行业研究计划：${JSON.stringify(researchPlan)}\n预识别关联主体：${JSON.stringify(researchBundle.resolvedEntities)}\n\n使用者背景只用于调整 HR 需要理解和追问的角度，不是公司事实或候选人事实。先判断输入名称是集团、法律实体、业务统称、业务单元还是品牌；再根据目标 JD 从有来源支持的关联主体中选择重点研究主体。重点研究主体可以与简历所列名称不同，但不得据此确认候选人的雇佣关系。\n\n公开网页：\n${sourceInput}`
   });
   const sanitizedResult = sanitizeCompanyResearchEvidence(result);
   const selectedIds = referencedResearchSourceIds(sanitizedResult);
@@ -1674,11 +1675,12 @@ async function analyzeJob(payload) {
       "将 JD 拆解为跨行业可复用的能力模型，不要只复述关键词。",
       "HR 的业务理解可能通俗、碎片或笼统。用它识别产品形态、目标用户、技术路线、关键业务任务和成功标准，再与 JD 交叉校准。",
       "业务理解是分析视角，不是候选人事实；其中模糊、推测或与 JD 冲突的内容不得直接设为硬性淘汰条件，应转化为待校准能力或面试验证方向。",
+      "使用者招聘背景用于理解 HR 所处的公司类型、岗位范围和专业关注点，从而调整能力表述与校准建议；不得据此降低证据门槛或引入歧视性判断。",
       "只分析岗位相关要求，忽略年龄、性别、婚育、民族等敏感属性。",
       "模糊要求不得设为硬性淘汰条件。相邻经历必须体现任务或能力迁移关系。",
       "用简洁中文输出。"
     ].join("\n"),
-    input: `岗位名称：${payload.title}\n行业：${payload.industry}\nJD：\n${payload.jd}\nHR 对业务的理解：\n${payload.businessContext || "无"}\n招聘经理补充：\n${payload.note || "无"}`
+    input: `岗位名称：${payload.title}\n行业：${payload.industry}\nJD：\n${payload.jd}\nHR 对业务的理解：\n${payload.businessContext || "无"}\n招聘经理补充：\n${payload.note || "无"}\n使用者招聘背景：\n${payload.userContext?.recruiterContext || "无"}`
   });
   return { result, mode: AI_PROVIDER, provider: AI_PROVIDER, model: MODEL };
 }
@@ -1732,6 +1734,7 @@ async function analyzeResume(payload) {
       "岗位知识包中的正向迁移规则只用于支持推断，反向风险规则用于检查误判，均不能替代简历事实。",
       "目标岗位中的 businessContext 是 HR 对产品、技术或业务目标的通俗理解。将它作为比较候选人经历的分析角度，重点识别其是否接触过相似产品形态、技术机理、用户场景或交付目标。",
       "businessContext 不能替代 JD，也不能证明候选人具备某项能力。简历没有对应证据时必须写未证实，并生成有针对性的追问。",
+      "目标岗位中的 userContext.recruiterContext 是使用者的招聘岗位与公司背景，只用于调整解释深度、关注角度和追问方式。不得把它当成候选人事实、岗位硬性要求或公司事实。",
       "用简洁中文输出。"
     ].join("\n"),
     input: `目标岗位：\n${JSON.stringify(payload.job)}\n\n候选人简历：\n${payload.resume}`
