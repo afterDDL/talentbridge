@@ -776,7 +776,6 @@ async function wikidataReverseLinkedEntityIds(entityId) {
   const query = [
     "SELECT DISTINCT ?item ?relationship WHERE {",
     `  { ?item wdt:P749 wd:${entityId} . BIND("子公司" AS ?relationship) }`,
-    `  UNION { ?item wdt:P127 wd:${entityId} . BIND("控股/所有关系" AS ?relationship) }`,
     `  UNION { ?item wdt:P361 wd:${entityId} . BIND("组成部分" AS ?relationship) }`,
     "} LIMIT 50"
   ].join("\n");
