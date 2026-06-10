@@ -1112,44 +1112,43 @@ async function collectCompanySources(company, job, researchPlan) {
     .slice(0, 12)
     .map((source, index) => ({ ...source, id: index + 1 }));
   const seenFinalUrls = new Set(sources.map(source => source.url));
-  for (const result of results) {
-    if (sources.length >= 12) break;
+  const fetchedSources = await Promise.all(results.slice(0, 16).map(async result => {
     const classification = classifyResearchSource(result.url, result.evidenceLevel);
     try {
       const page = await fetchWithLimit(result.url);
-      if (seenFinalUrls.has(page.url)) continue;
-      if (!page.type.includes("html") && !page.type.includes("text")) continue;
+      if (!page.type.includes("html") && !page.type.includes("text")) return null;
       const title = decodeHtml(page.text.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || new URL(page.url).hostname)
         .replace(/\s+/g, " ").trim();
       const content = stripHtml(page.text);
       if (content.length < 180) throw new Error("来源正文过短");
-      sources.push({
-        id: sources.length + 1,
+      return {
         title: title.slice(0, 160),
         url: page.url,
         domain: new URL(page.url).hostname,
         content: content.slice(0, 5000),
         evidenceLevel: classification.evidenceLevel,
         sourceCategory: classification.sourceCategory
-      });
-      seenFinalUrls.add(page.url);
+      };
     } catch (error) {
       console.warn("Company source skipped:", error.message);
       const snippet = `${result.title}。${result.description}`.trim();
       if (snippet.length >= 60) {
-        if (seenFinalUrls.has(result.url)) continue;
-        sources.push({
-          id: sources.length + 1,
+        return {
           title: result.title.slice(0, 160) || new URL(result.url).hostname,
           url: result.url,
           domain: new URL(result.url).hostname,
           content: snippet.slice(0, 1000),
           evidenceLevel: "搜索摘要",
           sourceCategory: classification.sourceCategory
-        });
-        seenFinalUrls.add(result.url);
+        };
       }
+      return null;
     }
+  }));
+  for (const source of fetchedSources) {
+    if (!source || sources.length >= 12 || seenFinalUrls.has(source.url)) continue;
+    sources.push({ ...source, id: sources.length + 1 });
+    seenFinalUrls.add(source.url);
   }
   return { sources, resolvedEntities: structured.resolvedEntities };
 }
@@ -1379,33 +1378,43 @@ async function callDeepSeek({ name, schema, system, input }) {
     `输出对象名称：${name}`,
     `必须严格符合以下 JSON Schema：${JSON.stringify(schema)}`
   ].join("\n");
-  const response = await fetch("https://api.deepseek.com/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        { role: "system", content: `${system}\n${schemaInstruction}` },
-        { role: "user", content: `${input}\n\n请以 JSON 格式返回结果。` }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.1,
-      stream: false
-    })
-  });
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error?.message || `DeepSeek API 返回 ${response.status}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 75000);
+  try {
+    const response = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: `${system}\n${schemaInstruction}` },
+          { role: "user", content: `${input}\n\n请以 JSON 格式返回结果。` }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+        stream: false
+      }),
+      signal: controller.signal
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error?.message || `DeepSeek API 返回 ${response.status}`);
+    }
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error("DeepSeek 未返回可解析内容");
+    const parsed = JSON.parse(content);
+    const result = parsed?.[name] && typeof parsed[name] === "object" ? parsed[name] : parsed;
+    validateRequiredFields(result, schema);
+    return result;
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("AI 研究超过 75 秒，已停止等待");
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("DeepSeek 未返回可解析内容");
-  const parsed = JSON.parse(content);
-  const result = parsed?.[name] && typeof parsed[name] === "object" ? parsed[name] : parsed;
-  validateRequiredFields(result, schema);
-  return result;
 }
 
 async function callAI(options) {
