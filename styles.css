@@ -135,6 +135,10 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .recent-job strong { max-width: 150px; margin-top: 1px; font-size: 12px; font-weight: 500; }
 .recent-job small { margin-top: 3px; color: var(--text-3); font-size: 11px; }
 .sidebar-footer { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.developer-link { display: flex; align-items: center; gap: 11px; min-height: 38px; margin-top: 2px; padding: 0 12px; border-radius: 6px; color: var(--text-2); font-size: 12px; text-decoration: none; }
+.developer-link:hover { background: #eef0f3; color: var(--blue); }
+.developer-link svg { width: 18px; height: 18px; }
+.developer-link strong { font-weight: 600; }
 .ai-note { display: flex; align-items: center; gap: 8px; margin: 10px 4px 0; padding: 9px; border-radius: 7px; background: #f0edff; color: #5b35a8; }
 .ai-note span { padding: 3px 5px; border-radius: 4px; background: white; font-size: 10px; font-weight: 700; }
 .ai-note p { margin: 0; font-size: 11px; line-height: 1.4; }
