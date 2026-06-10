@@ -524,7 +524,14 @@ function renderWorkbench() {
   state.view = "workbench";
   setActiveSidebar();
   renderRecentJobs();
-  const chipImported = state.imported.chip;
+  const importedJobs = Object.values(jobs).filter(job => state.imported[job.id]);
+  const recoveredItems = importedJobs.flatMap(job => job.candidates
+    .filter(candidate => candidate.recovered)
+    .map(candidate => ({ job, candidate })));
+  const reviewItems = importedJobs.flatMap(job => job.candidates
+    .filter(candidate => ["review", "unknown"].includes(candidate.group))
+    .map(candidate => ({ job, candidate })));
+  const insightItems = recoveredItems.slice(0, 3);
   main.innerHTML = `
     <section class="page">
       <div class="overview-hero">
@@ -539,14 +546,25 @@ function renderWorkbench() {
           </div>
         </div>
         <aside class="hero-insight">
-          <div class="insight-title"><span class="pulse"></span>本周人才洞察</div>
-          <div class="big-number">${chipImported ? "3" : "--"}<small>位 AI 新找回候选人</small></div>
-          <p class="tiny">${chipImported ? "他们未被关键词 ATS 命中，但底层经历与岗位存在可信关联。" : "完成候选人导入后，这里将展示增量召回结果。"}</p>
-          <div class="insight-list">
-            <div><span>进行中的岗位</span><strong>${Object.keys(jobs).length}</strong></div>
-            <div><span>待人工复核</span><strong>${chipImported ? "4" : "0"}</strong></div>
-            <div><span>预计节省筛选时间</span><strong>${chipImported ? "42 分钟" : "--"}</strong></div>
+          <div class="insight-title"><span class="pulse"></span>招聘行动提醒</div>
+          <div class="insight-metrics">
+            <div><strong>${recoveredItems.length}</strong><span>AI 新找回</span><small>ATS 未命中但存在迁移证据</small></div>
+            <div><strong>${reviewItems.length}</strong><span>待 HR 判断</span><small>值得复核或信息仍不足</small></div>
           </div>
+          <div class="insight-candidates">
+            <header><strong>建议优先查看</strong><span>${importedJobs.length} 个岗位已有候选人</span></header>
+            ${insightItems.length ? insightItems.map(({ job, candidate }) => `
+              <button data-action="open-insight-candidate" data-job-id="${job.id}" data-candidate-id="${candidate.id}">
+                <span class="person-avatar">${escapeHtml(candidate.name.slice(-1))}</span>
+                <span><strong>${escapeHtml(candidate.name)} · ${escapeHtml(candidate.role)}</strong><small>${escapeHtml(job.title)}｜${escapeHtml(candidate.core)}</small></span>
+                <em>查看证据 →</em>
+              </button>`).join("") : `
+              <div class="insight-empty">
+                <strong>尚无增量候选人</strong>
+                <span>导入简历后，这里会列出 ATS 漏选但值得人工复核的人选。</span>
+              </div>`}
+          </div>
+          <button class="insight-queue-button" data-action="open-insight-queue">${reviewItems.length ? `进入待复核队列（${reviewItems.length}）` : "查看当前岗位"}</button>
         </aside>
       </div>
       <div class="dashboard-body">
@@ -2600,6 +2618,18 @@ function handleClick(event) {
   if (action === "go-workbench") renderWorkbench();
   if (action === "open-current") renderRequirement();
   if (action === "open-project") { state.currentJob = actionEl.dataset.job; renderRequirement(); }
+  if (action === "open-insight-candidate") {
+    state.currentJob = actionEl.dataset.jobId;
+    state.selectedCandidate = actionEl.dataset.candidateId;
+    renderCandidateDetail(state.selectedCandidate);
+  }
+  if (action === "open-insight-queue") {
+    const targetJob = Object.values(jobs).find(job => state.imported[job.id] && job.candidates.some(candidate => ["review", "unknown"].includes(candidate.group)))
+      || currentJob();
+    state.currentJob = targetJob.id;
+    state.filter = "all";
+    state.imported[targetJob.id] ? renderQueue() : renderRequirement();
+  }
   if (action === "confirm-model") {
     saveModelFromPage();
     openImportModal();
