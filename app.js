@@ -611,30 +611,37 @@ function renderRecentJobs() {
       </button>`).join("")}`;
 }
 
-function stepHeader(active) {
+function workflowStepper(active) {
+  const labels = ["定义岗位", "校准标准", "导入简历", "复核候选人", "回填结果", "优化寻访"];
+  return `
+    <div class="stepper workflow-stepper" aria-label="招聘闭环">
+      ${labels.map((label, index) => {
+        const num = index + 1;
+        const cls = num === active ? "active" : num < active ? "done" : "";
+        const mark = num < active ? "✓" : num;
+        return `<button class="step ${cls}" data-step="${num}"><span>${mark}</span><small>步骤 ${num}</small>${label}</button>`;
+      }).join("")}
+    </div>`;
+}
+
+function stepHeader(active, pageName = "") {
   const job = currentJob();
-  const labels = ["岗位需求", "能力校准", "候选人导入", "AI 复核"];
+  const names = ["岗位定义", "能力标准", "简历导入", "候选人复核", "招聘结果", "寻访策略"];
+  const currentName = pageName || names[active - 1];
   return `
     <div class="page-head">
       <div class="breadcrumbs"><span>招聘项目</span><span>/</span><b>${job.title}</b></div>
       <div class="title-row">
         <div class="title-copy">
           <span class="job-icon ${job.id}">${jobIcon(job)}</span>
-          <div><h1>${job.title}</h1><p>${job.industry} · 最后更新于刚刚</p></div>
+          <div><span class="function-label">当前功能 · ${currentName}</span><h1>${job.title}</h1><p>${job.industry}</p></div>
         </div>
         <div class="title-actions">
-          <button class="btn secondary" data-action="switch-job">返回项目列表</button>
-          ${active >= 3 ? `<button class="btn primary" data-action="open-import">＋ 导入候选人</button>` : ""}
+          <button class="btn secondary" data-action="switch-job">切换招聘项目</button>
+          ${active >= 3 && active <= 4 ? `<button class="btn primary" data-action="open-import">＋ 添加候选人</button>` : ""}
         </div>
       </div>
-      <div class="stepper">
-        ${labels.map((label, index) => {
-          const num = index + 1;
-          const cls = num === active ? "active" : num < active ? "done" : "";
-          const mark = num < active ? "✓" : num;
-          return `<button class="step ${cls}" data-step="${num}"><span>${mark}</span>${label}</button>`;
-        }).join("")}
-      </div>
+      ${workflowStepper(active)}
     </div>`;
 }
 
@@ -674,13 +681,13 @@ function renderWorkbench() {
     <section class="page">
       <div class="overview-hero">
         <div class="hero-copy">
-          <p class="eyebrow">AI 人才研究工作台</p>
+          <p class="eyebrow">AI 招聘闭环工作台</p>
           <h1>找到关键词之外，真正值得被看见的人</h1>
-          <p>传统关键词筛选难以理解不同岗位、技术路线和行业经历背后相通的任务与能力，既容易漏掉具备迁移潜力的人才，也可能放入只有关键词却缺少真实经验的人选。TalentBridge 基于系统化的行业与技术研究，将岗位要求和候选人经历还原为底层任务、技术机理与能力证据，识别可信的迁移关系，帮助 HR 找回漏选人才，并通过人工复核、招聘进展回填和效果复盘，完成从岗位理解到招聘结果验证的业务闭环。</p>
+          <p>把岗位和经历还原为任务、技术与能力证据，找回关键词筛选遗漏的人才；再用 HR 决策和招聘结果持续优化下一轮寻访。</p>
           <div class="hero-actions">
-            <button class="btn primary" data-action="open-current">继续分析当前岗位</button>
-            <button class="btn secondary" data-action="new-project">＋ 创建招聘项目</button>
-            <button class="btn ghost" data-action="start-demo">▶ 3 分钟演示</button>
+            <button class="btn primary" data-action="open-current">进入当前招聘项目</button>
+            <button class="btn secondary" data-action="new-project">＋ 新建岗位</button>
+            <button class="btn ghost" data-action="start-demo">▶ 查看完整闭环演示</button>
           </div>
         </div>
         <aside class="hero-insight">
@@ -1156,10 +1163,11 @@ function renderRequirement() {
     <section class="page">
       ${stepHeader(1)}
       <div class="page-body">
+        <div class="page-purpose-bar"><span>岗位定义</span><strong>确认 AI 应该按什么业务目标理解这个岗位</strong><small>完成后进入能力标准校准</small></div>
         <div class="content-grid">
           <div class="card">
             <div class="card-head">
-              <div><h2>岗位需求</h2><p>确认 JD 与业务背景，AI 将据此生成初始能力模型</p></div>
+              <div><h2>JD 与业务背景</h2><p>检查输入是否准确</p></div>
               <span class="tag green dot">已解析</span>
             </div>
             <div class="card-body">
@@ -1169,14 +1177,14 @@ function renderRequirement() {
                 <p>${escapeHtml(job.businessContext || "暂未补充。AI 当前主要依据 JD 和能力模型进行分析。")}</p>
               </div>
               <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
-                <button class="btn secondary" data-action="edit-jd">编辑岗位输入</button>
-                <button class="btn primary" data-step="2">查看 AI 能力模型</button>
+                <button class="btn secondary" data-action="edit-jd">修改 JD / 业务理解</button>
+                <button class="btn primary" data-step="2">下一步：校准能力标准 →</button>
               </div>
             </div>
           </div>
           <div class="stack">
             <div class="card ai-summary">
-              <div class="card-head"><div><p class="eyebrow">AI 岗位理解</p><h3>这个岗位真正要解决什么？</h3></div></div>
+              <div class="card-head"><div><p class="eyebrow">AI 提炼结果</p><h3>岗位核心任务</h3></div></div>
               <div class="card-body">
                 <ul>
                   <li>${job.summary}</li>
@@ -1184,7 +1192,7 @@ function renderRequirement() {
                   <li>发现 ${job.adjacent.length} 类可能具备迁移价值的相邻经历。</li>
                 </ul>
                 <details class="job-understanding-details">
-                  <summary><span>展开查看并编辑具体内容</span><small>修改后将用于候选人分析</small></summary>
+                  <summary><span>编辑能力与相邻经历</span><small>${job.model.length} 项能力 · ${job.adjacent.length} 类相邻经历</small></summary>
                   <div class="job-understanding-editor">
                     <label class="understanding-summary">
                       <span>岗位真正要解决的问题</span>
@@ -1217,7 +1225,7 @@ function renderRequirement() {
               </div>
             </div>
             <div class="card">
-              <div class="card-head"><div><h3>输入来源</h3><p>结论只基于以下可追溯信息</p></div></div>
+              <div class="card-head"><div><h3>分析依据</h3><p>用于生成岗位模型</p></div></div>
               <div class="card-body">
                 <p><span class="tag green">JD 原文</span> <span class="tag purple">业务理解</span> <span class="tag blue">招聘经理补充</span></p>
                 <p class="tiny">暂未使用候选人的年龄、性别、婚育等非岗位相关信息。</p>
@@ -1239,10 +1247,11 @@ function renderCalibration() {
     <section class="page">
       ${stepHeader(2)}
       <div class="page-body">
+        <div class="page-purpose-bar"><span>能力标准</span><strong>确定必须能力、加分能力和可接受的相邻经历</strong><small>避免把模糊要求变成硬性淘汰条件</small></div>
         <div class="content-grid equal">
           <div class="card">
             <div class="card-head">
-              <div><h2>岗位能力模型</h2><p>调整重要程度，避免 AI 将模糊要求当作硬性淘汰项</p></div>
+              <div><h2>能力判断标准</h2><p>直接编辑名称、说明和优先级</p></div>
               <button class="btn small secondary" data-action="add-capability">＋ 添加能力</button>
             </div>
             <div class="card-body">
@@ -1257,7 +1266,7 @@ function renderCalibration() {
           </div>
           <div class="stack">
             <div class="card">
-              <div class="card-head"><div><p class="eyebrow">招聘经理校准</p><h3>把隐性判断说清楚</h3><p>4 个问题 · 预计 2 分钟</p></div></div>
+              <div class="card-head"><div><p class="eyebrow">筛选边界</p><h3>确定 AI 的判断原则</h3><p>4 项快速设置</p></div></div>
               <div class="card-body">
                 <div class="calibration-item">
                   <label>信息不足时，系统应该如何处理？</label>
@@ -1284,7 +1293,7 @@ function renderCalibration() {
                 </div>
               </div>
             </div>
-            <button class="btn primary" style="min-height:42px" data-action="confirm-model">确认岗位模型，导入候选人 →</button>
+            <button class="btn primary" style="min-height:42px" data-action="confirm-model">保存标准并导入简历 →</button>
           </div>
         </div>
       </div>
@@ -1319,10 +1328,11 @@ function renderImportStep() {
     <section class="page">
       ${stepHeader(3)}
       <div class="page-body">
+        <div class="page-purpose-bar"><span>简历导入</span><strong>添加本岗位需要分析的候选人</strong><small>支持示例数据、PDF、DOCX 和粘贴文本</small></div>
         <div class="content-grid">
           <div class="card">
             <div class="card-head">
-              <div><h2>${imported ? "候选人已就绪" : "导入候选人"}</h2><p>简历将仅用于当前岗位的能力迁移分析</p></div>
+              <div><h2>${imported ? "候选人已导入" : "添加候选人"}</h2><p>${imported ? "检查名单后开始分析" : "选择一种导入方式"}</p></div>
               ${imported ? `<span class="tag green dot">${job.candidates.length} 份解析完成</span>` : ""}
             </div>
             <div class="card-body">
@@ -1332,14 +1342,14 @@ function renderImportStep() {
                     <div class="upload-icon">⇧</div>
                     <h3>添加候选人简历</h3>
                     <p>支持使用示例数据、上传 PDF / DOCX 或粘贴文本</p>
-                    <button class="btn primary" data-action="open-import">选择导入方式</button>
+                    <button class="btn primary" data-action="open-import">＋ 添加候选人简历</button>
                   </div>
                 </div>`}
             </div>
           </div>
           <div class="stack">
             <div class="card">
-              <div class="card-head"><div><h3>分析依据</h3><p>系统会从五个维度还原候选人经历</p></div></div>
+              <div class="card-head"><div><h3>AI 将提取什么</h3><p>五类可复核信息</p></div></div>
               <div class="card-body">
                 ${["业务任务", "工作方法", "问题复杂度", "责任范围", "结果证据"].map((x, i) => `<div class="parse-step"><span class="check">${i + 1}</span>${x}</div>`).join("")}
               </div>
@@ -1370,8 +1380,8 @@ function importedList(job) {
           </div>`).join("")}
       </div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
-        <button class="btn secondary" data-action="open-import">继续添加</button>
-        <button class="btn primary" data-action="start-analysis">开始能力迁移分析 →</button>
+        <button class="btn secondary" data-action="open-import">＋ 继续添加候选人</button>
+        <button class="btn primary" data-action="start-analysis">分析并进入复核队列 →</button>
       </div>
     </div>`;
 }
@@ -1402,9 +1412,10 @@ function renderQueue() {
     <section class="page">
       ${stepHeader(4)}
       <div class="page-body">
+        <div class="page-purpose-bar"><span>候选人复核</span><strong>判断是否联系，并记录判断理由</strong><small>${businessMetrics.pendingReview.length} 人待复核 · ${businessMetrics.interviewed.length} 人已进入面试</small></div>
         <div class="compare-banner">
-          <div><strong>AI 比关键词 ATS 多找回 ${recovered} 位值得复核的候选人</strong><p>增量候选人均提供迁移路径、原文证据和待验证缺口。</p></div>
-          <button class="btn secondary" data-action="show-compare">查看效果复盘</button>
+          <div><strong>发现 ${recovered} 位 ATS 未命中的候选人</strong><p>先复核迁移证据，再决定是否联系。</p></div>
+          <button class="btn secondary" data-action="show-compare">查看招聘结果看板</button>
         </div>
         <div class="queue-stats">
           ${statCard("全部候选人", job.candidates.length, "已完成结构化分析")}
@@ -1415,8 +1426,8 @@ function renderQueue() {
         </div>
         <div class="card">
           <div class="card-head" style="align-items:center">
-            <div><h2>人才复核队列</h2><p>按证据强度和迁移价值排序，不使用黑箱总分作淘汰</p></div>
-            <div class="title-actions"><button class="btn secondary" data-action="export-queue">导出候选人 CSV</button><button class="btn primary" data-action="open-import">＋ 导入候选人</button></div>
+            <div><h2>待复核候选人</h2><p>点击候选人查看证据并提交 HR 结论</p></div>
+            <div class="title-actions"><button class="btn secondary" data-action="export-queue">导出名单</button><button class="btn primary" data-action="open-import">＋ 添加候选人</button></div>
           </div>
           <div class="card-body" style="padding:14px 0 0">
             <div class="queue-toolbar" style="padding:0 18px">
@@ -1795,31 +1806,14 @@ function renderSourcingStrategy(jobId = state.currentJob) {
   renderRecentJobs();
   main.innerHTML = `
     <section class="page">
-      <div class="page-head sourcing-page-head">
-        <div class="breadcrumbs"><button class="btn ghost small" data-action="go-workbench">← 返回首页</button><span>/</span><b>寻访策略</b></div>
-        <div class="title-row">
-          <div class="title-copy">
-            <span class="job-icon ${job.id}">${jobIcon(job)}</span>
-            <div><h1>下一轮去哪里找人</h1><p>${job.title} · 根据真实招聘结果反向生成关键词与目标公司</p></div>
-          </div>
-          <div class="title-actions">
-            <button class="btn secondary" data-action="show-compare">查看招聘效果</button>
-          </div>
-        </div>
-      </div>
+      ${stepHeader(6, "寻访策略")}
       <div class="page-body sourcing-page-body">
-        <div class="sourcing-page-explainer">
-          <span>1</span><p><strong>只看正向结果</strong><small>HR 推荐且已经联系、面试、Offer 或入职</small></p>
-          <i>→</i>
-          <span>2</span><p><strong>提炼有效信号</strong><small>技术、产品平台、相邻岗位和公司背景</small></p>
-          <i>→</i>
-          <span>3</span><p><strong>用于下一轮搜索</strong><small>复制关键词或布尔搜索组合到招聘网站</small></p>
-        </div>
+        <div class="page-purpose-bar"><span>寻访策略</span><strong>把有效候选人的共同特征变成下一轮搜索词</strong><small><button class="text-action" data-action="show-compare">查看结果依据</button></small></div>
         ${sourcingInsightCard(job)}
-        <div class="sourcing-boundary-note">
-          <strong>怎么使用更稳妥？</strong>
-          <p>先用技术词和相邻岗位扩大召回，再叠加产品或目标公司缩小范围。关键词只负责帮 HR 找到更多可能的人，不替代后续简历分析和人工判断。</p>
-        </div>
+        <details class="sourcing-boundary-note compact-details">
+          <summary>使用边界与搜索建议</summary>
+          <p>先用技术词和相邻岗位扩大召回，再叠加产品或目标公司缩小范围。关键词用于找人，不替代简历分析和人工判断。</p>
+        </details>
       </div>
     </section>`;
 }
@@ -1833,21 +1827,9 @@ function renderComparison() {
   renderRecentJobs();
   main.innerHTML = `
     <section class="page">
-      <div class="page-head" style="padding-bottom:18px">
-        <div class="breadcrumbs"><button class="btn ghost small" data-action="back-queue">← 返回复核队列</button><span>/</span><b>效果复盘</b></div>
-        <div class="title-row">
-          <div class="title-copy"><div><h1>这轮招聘进行得怎么样？</h1><p>${job.title} · 用真实复核和招聘进展回答三个业务问题</p></div></div>
-          <div class="title-actions">
-            <button class="btn secondary" data-action="copy-evaluation">复制摘要</button>
-            <button class="btn primary" data-action="open-sourcing-strategy" data-job-id="${job.id}">打开寻访策略</button>
-          </div>
-        </div>
-      </div>
+      ${stepHeader(5, "招聘结果")}
       <div class="page-body">
-        <div class="review-purpose">
-          <strong>这个页面只回答三件事</strong>
-          <span>① 招聘推进到哪一步　② AI 多找回的人是否有效　③ 下一轮应该用什么方式继续找人</span>
-        </div>
+        <div class="page-purpose-bar"><span>招聘结果</span><strong>确认 AI 找回的人是否真的进入后续招聘流程</strong><small><button class="text-action" data-action="copy-evaluation">复制结果摘要</button></small></div>
         <div class="review-section-title"><span>01</span><div><h2>招聘推进到哪一步？</h2><p>先看实际转化，不看模型术语。</p></div></div>
         <div class="business-funnel-grid">
           ${businessOutcomeCard("完成复核", business.reviewed.length, `${business.reviewRate}% 候选人已有 HR 结论`, "blue")}
@@ -1868,17 +1850,21 @@ function renderComparison() {
             <p><strong>${business.hired.length}</strong><span>已入职</span></p>
           </div>
         </div>
-        ${metrics.unknown.length ? `<div class="evaluation-warning"><strong>还有 ${metrics.unknown.length} 位候选人没有模型质量标签</strong><span>未明确复核的人不进入召回率和精确率计算，避免指标失真。</span></div>` : ""}
-        <div class="metric-compare-grid">
-          ${metricCompareCard("召回率", metrics.atsRecall, metrics.aiRecall, "合理候选人中，被系统找回的比例")}
-          ${metricCompareCard("精确率", metrics.atsPrecision, metrics.aiPrecision, "系统建议复核的人中，人工确认合理的比例")}
-          <div class="card impact-card">
-            <p class="eyebrow">主要人工判断依据</p>
-            <strong>${business.topReasons.length}<small> 类理由</small></strong>
-            <p>用于解释 HR 为什么接受或推翻 AI 建议</p>
-            ${(business.topReasons.slice(0, 2).map(([reason, count]) => `<div><span>${reason}</span><b>${count} 次</b></div>`).join("")) || `<div><span>尚未填写结构化理由</span><b>待补充</b></div>`}
+        <details class="review-metric-details">
+          <summary><span><strong>查看模型指标</strong><small>召回率、精确率与人工判断依据</small></span><b>展开评估明细</b></summary>
+          <div>
+            ${metrics.unknown.length ? `<div class="evaluation-warning"><strong>${metrics.unknown.length} 位候选人尚未标注</strong><span>未标注数据不进入指标计算。</span></div>` : ""}
+            <div class="metric-compare-grid">
+              ${metricCompareCard("召回率", metrics.atsRecall, metrics.aiRecall, "合理候选人中，被系统找回的比例")}
+              ${metricCompareCard("精确率", metrics.atsPrecision, metrics.aiPrecision, "系统建议复核的人中，人工确认合理的比例")}
+              <div class="card impact-card">
+                <p class="eyebrow">HR 判断依据</p>
+                <strong>${business.topReasons.length}<small> 类理由</small></strong>
+                ${(business.topReasons.slice(0, 2).map(([reason, count]) => `<div><span>${reason}</span><b>${count} 次</b></div>`).join("")) || `<div><span>尚未填写结构化理由</span><b>待补充</b></div>`}
+              </div>
+            </div>
           </div>
-        </div>
+        </details>
         <div class="review-section-title"><span>03</span><div><h2>下一轮应该去哪里找人？</h2><p>把已验证的候选人特征反向变成搜索词，而不是重新从 JD 猜关键词。</p></div></div>
         ${sourcingReviewCta(job)}
         <details class="review-advanced-details">
@@ -2239,14 +2225,17 @@ function renderCandidateDetail(candidateId) {
   const record = candidateRecord(c.id);
   main.innerHTML = `
     <section class="page">
-      <div class="page-head" style="padding-bottom:18px">
-        <div class="breadcrumbs"><button class="btn ghost small" data-action="back-queue">← 返回复核队列</button><span>/</span><b>${c.name}</b></div>
-        <div class="title-row">
-          <div class="title-copy"><div><h1>能力迁移分析</h1><p>${job.title} · 分析生成于刚刚</p></div></div>
-          <div class="title-actions"><button class="btn danger" data-action="delete-candidate">删除候选人</button><button class="btn secondary resume-entry" data-action="view-resume">查看原始简历</button><button class="btn secondary" data-action="export-candidate">导出分析报告</button><button class="btn primary" data-action="next-candidate">下一位候选人 →</button></div>
-        </div>
-      </div>
+      ${stepHeader(4, "候选人复核")}
       <div class="page-body">
+        <div class="candidate-action-bar">
+          <div><span>正在复核</span><strong>${c.name} · ${c.role}</strong></div>
+          <div>
+            <button class="btn danger small" data-action="delete-candidate">删除</button>
+            <button class="btn secondary small resume-entry" data-action="view-resume">查看原始简历</button>
+            <button class="btn secondary small" data-action="export-candidate">导出报告</button>
+            <button class="btn primary small" data-action="next-candidate">下一位 →</button>
+          </div>
+        </div>
         <div class="decision-page-grid">
           <div class="stack">
             <div class="card decision-hero">
@@ -2259,12 +2248,12 @@ function renderCandidateDetail(candidateId) {
                   <div class="decision-verdict"><span class="tag ${verdictClass}">${c.verdict}</span><small>迁移置信度 ${confidence}</small></div>
                 </div>
                 <h3>${c.core}</h3>
-                <p>${c.recovered ? "关键词未命中，但有部分关键能力值得 HR 进一步验证。" : "请结合下方能力证据与风险边界作人工判断。"}</p>
+                <p>${c.recovered ? "ATS 未命中 · AI 发现可迁移能力" : "直接相关候选人 · 请核实职责深度"}</p>
               </div>
             </div>
 
             <div class="card">
-              <div class="card-head"><div><h2>HR 应重点判断的能力</h2><p>只保留最影响是否联系候选人的三个能力点</p></div></div>
+              <div class="card-head"><div><h2>联系前重点判断</h2><p>三个最影响决策的能力点</p></div></div>
               <div class="card-body capability-focus-list">
                 ${capabilityPoints.map(item => `
                   <div class="capability-focus">
@@ -2275,22 +2264,22 @@ function renderCandidateDetail(candidateId) {
             </div>
 
             <div class="card company-research-card">
-              <div class="card-head"><div><h2>原司公开背景与 JD 适配</h2><p>联网搜索企业产品和技术方向，不把企业背景等同于个人能力</p></div></div>
+              <div class="card-head"><div><h2>原公司与岗位技术关联</h2><p>公开信息研究结果</p></div></div>
               <div class="card-body">${companyResearchCard(c)}</div>
             </div>
           </div>
 
           <aside class="stack decision-sidebar">
             <div class="card risk-card">
-              <div class="card-head"><div><h3>联系前要想清楚</h3><p>最可能造成误判的边界</p></div></div>
+              <div class="card-head"><div><h3>风险边界</h3><p>不能直接推断的能力</p></div></div>
               <div class="card-body"><ul class="decision-risk-list">${transferBoundary.slice(0, 3).map(item => `<li>${item}</li>`).join("")}</ul></div>
             </div>
             <div class="card">
-              <div class="card-head"><div><h3>首次沟通问什么</h3><p>用三个问题验证迁移是否成立</p></div></div>
+              <div class="card-head"><div><h3>首轮验证问题</h3><p>面试或电话沟通可直接使用</p></div></div>
               <div class="card-body"><ol class="question-list">${c.questions.slice(0, 3).map(x => `<li>${x}</li>`).join("")}</ol></div>
             </div>
             <div class="card">
-              <div class="card-head"><div><h3>HR 复核决策</h3><p>结论和理由将进入效果复盘</p></div></div>
+              <div class="card-head"><div><h3>1. 提交 HR 决策</h3><p>判断是否值得进入招聘流程</p></div></div>
               <div class="card-body">
                 <div class="review-choice-grid">
                   ${REVIEW_DECISIONS.map(value => `<label class="${record.value === value ? "selected" : ""}"><input type="radio" name="reviewDecision" value="${value}" ${record.value === value ? "checked" : ""}><span>${value}</span></label>`).join("")}
@@ -2300,15 +2289,15 @@ function renderCandidateDetail(candidateId) {
                   ${REVIEW_REASONS.map(reason => `<label><input type="checkbox" name="reviewReason" value="${reason}" ${record.reasons.includes(reason) ? "checked" : ""}><span>${reason}</span></label>`).join("")}
                 </div>
                 <textarea class="decision-note" id="decisionNote" placeholder="补充业务判断、风险或建议">${escapeHtml(record.note)}</textarea>
-                <button class="btn primary full-width" data-action="save-review-decision">保存复核决策</button>
+                <button class="btn primary full-width" data-action="save-review-decision">保存 HR 决策</button>
               </div>
             </div>
             <div class="card">
-              <div class="card-head"><div><h3>招聘结果回填</h3><p>记录是否真正联系、面试和转化；Demo 数据保存在当前浏览器</p></div></div>
+              <div class="card-head"><div><h3>2. 更新招聘进展</h3><p>联系、面试、Offer 或入职</p></div></div>
               <div class="card-body outcome-form">
                 <label><span>当前招聘阶段</span><select id="hiringStage">${HIRING_STAGES.map(stage => `<option value="${stage}" ${record.stage === stage ? "selected" : ""}>${stage}</option>`).join("")}</select></label>
                 <label><span>跟进备注</span><textarea id="hiringStageNote" placeholder="例如：候选人愿意沟通，周五安排技术面">${escapeHtml(record.stageNote)}</textarea></label>
-                <button class="btn secondary full-width" data-action="save-hiring-outcome">保存招聘进展</button>
+                <button class="btn secondary full-width" data-action="save-hiring-outcome">更新招聘进展</button>
                 ${record.updatedAt ? `<small class="record-updated">最近更新：${new Date(record.updatedAt).toLocaleString("zh-CN")}</small>` : ""}
               </div>
             </div>
@@ -3218,6 +3207,8 @@ function handleClick(event) {
     if (target === 2) renderCalibration();
     if (target === 3) renderImportStep();
     if (target === 4) renderQueue();
+    if (target === 5) renderComparison();
+    if (target === 6) renderSourcingStrategy();
     return;
   }
 

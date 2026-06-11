@@ -71,8 +71,13 @@ const checks = vm.runInContext(`
     && state.sourcingInsights.chip?.candidateIds?.includes("linjia");
   renderWorkbench();
   const homeHtml = main.innerHTML;
+  renderRequirement();
+  const requirementHtml = main.innerHTML;
   renderComparison();
   const reviewHtml = main.innerHTML;
+  jobs.chip.candidates.find(candidate => candidate.id === "linjia").companyResearch = { status: "loading", skill: "industry-research-v6" };
+  renderCandidateDetail("linjia");
+  const candidateHtml = main.innerHTML;
   state.sourcingInsights.chip = {
     status: "ready",
     generatedAt: new Date().toISOString(),
@@ -97,14 +102,21 @@ const checks = vm.runInContext(`
   const strategyHtml = main.innerHTML;
   ({
     demoSeedsSourcingInsight: builtInInsightReady,
+    workflowHasSixSteps: ["定义岗位", "校准标准", "导入简历", "复核候选人", "回填结果", "优化寻访"].every(text => requirementHtml.includes(text)),
+    workflowConnectsOutcomeAndSourcing: requirementHtml.includes('data-step="5"') && requirementHtml.includes('data-step="6"'),
+    requirementHasClearPurpose: requirementHtml.includes("岗位定义") && requirementHtml.includes("下一步：校准能力标准"),
     homeHasSourcingWindow: homeHtml.includes("随时可查 · 寻访策略") && homeHtml.includes("open-sourcing-strategy"),
     reviewHasThreeQuestions: ["招聘推进到哪一步", "AI 多找回的人，后来真的有效吗", "下一轮应该去哪里找人"].every(text => reviewHtml.includes(text)),
+    reviewHasClearFunctionLabel: reviewHtml.includes("当前功能 · 招聘结果") && reviewHtml.includes("确认 AI 找回的人是否真的进入后续招聘流程"),
+    reviewCollapsesModelMetrics: reviewHtml.includes("review-metric-details") && reviewHtml.includes("展开评估明细"),
     reviewHasCollapsedDetails: reviewHtml.includes("review-advanced-details") && reviewHtml.includes("展开高级明细"),
+    candidateHasClearActions: candidateHtml.includes("正在复核") && candidateHtml.includes("1. 提交 HR 决策") && candidateHtml.includes("2. 更新招聘进展"),
     reviewUsesCompactSourcingEntry: reviewResultHtml.includes("打开寻访策略") && !reviewResultHtml.includes("sourcing-keyword-grid"),
     homePreviewsGeneratedStrategy: homeResultHtml.includes("已有可用搜索策略") && homeResultHtml.includes("混合键合"),
     strategyHasAllGroups: ["关键技术", "产品 / 平台", "相邻岗位", "目标公司"].every(text => strategyHtml.includes(text)),
     strategyHasQuery: strategyHtml.includes("核心技术组合") && strategyHtml.includes("混合键合"),
     strategyHasCandidateCase: strategyHtml.includes("内置正向候选人案例") && strategyHtml.includes("林嘉") && strategyHtml.includes("ATS 漏选代表案例"),
+    strategyHasClearFunctionLabel: strategyHtml.includes("当前功能 · 寻访策略") && strategyHtml.includes("把有效候选人的共同特征变成下一轮搜索词"),
     strategyHasCopy: strategyHtml.includes("copy-sourcing-query") && strategyHtml.includes("copy-all-sourcing-keywords")
   });
 `, sandbox);
