@@ -5,7 +5,7 @@
   "description": "AI 高端人才迁移识别助手",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check app.js"
+    "check": "node --check server.js && node --check app.js && node tests/keyword-feedback.test.js"
   },
   "engines": {
     "node": ">=20"

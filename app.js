@@ -252,6 +252,7 @@ const state = {
   privacyMode: true,
   decisions: {},
   evaluations: {},
+  sourcingInsights: {},
   deletedCandidates: {},
   selectedKnowledgePack: "advanced-packaging",
   userProfile: {
@@ -330,6 +331,7 @@ function loadSavedState() {
     if (saved.imported) state.imported = { ...state.imported, ...saved.imported };
     if (saved.decisions) state.decisions = saved.decisions;
     if (saved.evaluations) state.evaluations = saved.evaluations;
+    if (saved.sourcingInsights) state.sourcingInsights = saved.sourcingInsights;
     if (saved.userProfile && typeof saved.userProfile === "object") {
       state.userProfile = {
         name: String(saved.userProfile.name || "演示用户").slice(0, 20),
@@ -384,6 +386,7 @@ function saveState() {
     imported: state.imported,
     decisions: state.decisions,
     evaluations: state.evaluations,
+    sourcingInsights: state.sourcingInsights,
     userProfile: state.userProfile,
     privacyMode: state.privacyMode,
     deletedCandidates: state.deletedCandidates,
@@ -1460,6 +1463,191 @@ function getEvaluationMetrics(job) {
   };
 }
 
+const SOURCING_POSITIVE_STAGES = ["已联系", "愿意沟通", "进入面试", "面试通过", "Offer", "已入职"];
+const SOURCING_STAGE_SCORE = {
+  "已联系": 1,
+  "愿意沟通": 2,
+  "进入面试": 3,
+  "面试通过": 4,
+  "Offer": 5,
+  "已入职": 6
+};
+
+function positiveSourcingCandidates(job) {
+  return job.candidates
+    .filter(candidate => {
+      const record = candidateRecord(candidate.id, job.id);
+      return record.value === "推荐联系" && SOURCING_POSITIVE_STAGES.includes(record.stage);
+    })
+    .sort((a, b) => {
+      const aRecord = candidateRecord(a.id, job.id);
+      const bRecord = candidateRecord(b.id, job.id);
+      return (SOURCING_STAGE_SCORE[bRecord.stage] || 0) - (SOURCING_STAGE_SCORE[aRecord.stage] || 0)
+        || (b.coverage || 0) - (a.coverage || 0);
+    })
+    .slice(0, 8);
+}
+
+function sourcingKeywordItems(items = [], type = "term") {
+  if (!items.length) return `<span class="sourcing-empty-text">暂无足够证据</span>`;
+  return items.map(item => {
+    const value = type === "company" ? item.company : item.term;
+    return `
+      <button class="sourcing-keyword" data-action="copy-sourcing-term" data-copy-text="${escapeHtml(value)}" title="${escapeHtml(item.reason || "点击复制")}">
+        <span>${escapeHtml(value)}</span>
+        <small>${item.sourceCount || 1} 份样本</small>
+      </button>`;
+  }).join("");
+}
+
+function sourcingInsightCard(job) {
+  const samples = positiveSourcingCandidates(job);
+  const insight = state.sourcingInsights[job.id];
+  const hasResult = insight?.result && ["ready", "loading", "error"].includes(insight.status);
+  const result = insight?.result;
+  const updated = insight?.generatedAt
+    ? new Date(insight.generatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    : "";
+
+  if (!samples.length) {
+    return `
+      <div class="card sourcing-feedback-card sourcing-feedback-empty">
+        <div>
+          <p class="eyebrow">寻访关键词反哺</p>
+          <h2>先积累一位有正向进展的候选人</h2>
+          <p>当候选人被 HR 推荐，并进入联系、面试、Offer 或入职阶段后，系统会从其经历中反向提炼下一轮找简历可用的技术、产品和公司关键词。</p>
+        </div>
+        <button class="btn secondary" disabled>暂无可用样本</button>
+      </div>`;
+  }
+
+  if (insight?.status === "loading" && !hasResult) {
+    return `
+      <div class="card sourcing-feedback-card sourcing-feedback-loading">
+        <div><span class="research-spinner"></span><div><h2>正在从正向候选人中提炼寻访词</h2><p>系统正在比较 ${samples.length} 份简历中的技术、产品、公司和岗位信号。</p></div></div>
+      </div>`;
+  }
+
+  if (!result) {
+    return `
+      <div class="card sourcing-feedback-card">
+        <div class="sourcing-feedback-intro">
+          <div>
+            <p class="eyebrow">寻访关键词反哺</p>
+            <h2>把招聘结果变成下一轮找人的搜索策略</h2>
+            <p>当前已有 ${samples.length} 位“HR 推荐且产生正向进展”的候选人。系统只基于这些真实反馈样本反向提炼，不用 AI 高分自证。</p>
+          </div>
+          <button class="btn primary" data-action="generate-sourcing-keywords">生成寻访关键词</button>
+        </div>
+        ${insight?.status === "error" ? `<div class="evaluation-warning"><strong>生成失败</strong><span>${escapeHtml(insight.error || "请稍后重试")}</span></div>` : ""}
+      </div>`;
+  }
+
+  return `
+    <div class="card sourcing-feedback-card">
+      <div class="card-head sourcing-feedback-head">
+        <div>
+          <p class="eyebrow">寻访关键词反哺</p>
+          <h2>下一轮主动寻访建议</h2>
+          <p>${escapeHtml(result.summary)}</p>
+        </div>
+        <div class="sourcing-feedback-actions">
+          <span class="tag green">${result.sampleSize || samples.length} 份正向样本</span>
+          <button class="btn secondary small" data-action="copy-all-sourcing-keywords">复制全部关键词</button>
+          <button class="btn primary small" data-action="generate-sourcing-keywords">${insight.status === "loading" ? "更新中…" : "根据最新结果更新"}</button>
+        </div>
+      </div>
+      <div class="sourcing-signal-note">
+        <strong>样本口径</strong>
+        <span>${escapeHtml(result.signalDescription || "HR 推荐联系，且已有联系或更深阶段进展")}${updated ? ` · 更新于 ${updated}` : ""}</span>
+      </div>
+      <div class="sourcing-keyword-grid">
+        <section><h3>关键技术</h3><p>搜索候选人真正做过的技术与方法</p><div>${sourcingKeywordItems(result.technicalKeywords)}</div></section>
+        <section><h3>产品 / 平台</h3><p>岗位名不同时，用产品环境扩大召回</p><div>${sourcingKeywordItems(result.productKeywords)}</div></section>
+        <section><h3>相邻岗位</h3><p>找到名称不同但经历相通的人</p><div>${sourcingKeywordItems(result.roleKeywords)}</div></section>
+        <section><h3>目标公司</h3><p>来自正向样本任职公司或已验证业务主体</p><div>${sourcingKeywordItems(result.targetCompanies, "company")}</div></section>
+      </div>
+      <div class="sourcing-query-list">
+        <div class="sourcing-query-title"><div><h3>可直接尝试的搜索组合</h3><p>不同招聘网站对布尔语法支持不同，可按实际情况删除引号或拆分搜索。</p></div></div>
+        ${(result.searchQueries || []).map((item, index) => `
+          <section>
+            <div><strong>${escapeHtml(item.label)}</strong><p>${escapeHtml(item.usage)}</p></div>
+            <code>${escapeHtml(item.query)}</code>
+            <button class="btn ghost small" data-action="copy-sourcing-query" data-query-index="${index}">复制</button>
+          </section>`).join("")}
+      </div>
+      ${result.exclusionKeywords?.length ? `<div class="sourcing-exclusions"><strong>建议排除</strong><span>${result.exclusionKeywords.map(escapeHtml).join("、")}</span></div>` : ""}
+      <div class="sourcing-cautions">${(result.cautions || []).map(item => `<span>· ${escapeHtml(item)}</span>`).join("")}</div>
+    </div>`;
+}
+
+async function sourcingCandidatePayload(candidate, job) {
+  const record = candidateRecord(candidate.id, job.id);
+  let resume = "";
+  try {
+    const original = await originalResumeFor(candidate);
+    resume = redactResume(original, candidate.name).text.slice(0, 6000);
+  } catch {
+    resume = redactResume(buildSampleResume(candidate), candidate.name).text.slice(0, 6000);
+  }
+  return {
+    role: candidate.role,
+    company: candidate.company,
+    outcome: { decision: record.value, stage: record.stage, reasons: record.reasons },
+    resume,
+    facts: candidate.facts || [],
+    transferable: candidate.transferable || [],
+    companyContext: candidate.companyContext || {},
+    companyResearch: candidate.companyResearch?.status === "researched" ? {
+      products: candidate.companyResearch.products || [],
+      technologies: candidate.companyResearch.technologies || [],
+      resolvedEntities: candidate.companyResearch.resolvedEntities || []
+    } : null,
+    adjacentRoles: job.adjacent || []
+  };
+}
+
+async function generateSourcingKeywords(options = {}) {
+  const job = currentJob();
+  if (state.sourcingInsights[job.id]?.status === "loading") return;
+  const samples = positiveSourcingCandidates(job);
+  if (!samples.length) {
+    if (!options.silent) toast("还没有可用于反哺的正向样本", "请先推荐候选人并回填联系、面试或 Offer 进展");
+    return;
+  }
+  const previousInsight = state.sourcingInsights[job.id];
+  const previous = previousInsight?.result;
+  state.sourcingInsights[job.id] = { status: "loading", result: previous || null };
+  if (document.querySelector(".sourcing-feedback-card")) renderComparison();
+  try {
+    const candidates = await Promise.all(samples.map(candidate => sourcingCandidatePayload(candidate, job)));
+    const data = await apiRequest("/api/generate-sourcing-keywords", {
+      job: analysisJobPayload(job),
+      signalDescription: "HR 推荐联系，且已进入联系、面试、Offer 或入职阶段",
+      candidates
+    });
+    state.sourcingInsights[job.id] = {
+      status: "ready",
+      result: data.result,
+      generatedAt: new Date().toISOString(),
+      candidateIds: samples.map(candidate => candidate.id)
+    };
+    saveState();
+    if (document.querySelector(".sourcing-feedback-card")) renderComparison();
+    toast(options.silent ? "寻访关键词已自动更新" : "寻访关键词已生成", `已从 ${samples.length} 份正向候选人经历中提炼`);
+  } catch (error) {
+    state.sourcingInsights[job.id] = {
+      status: "error",
+      result: previous || null,
+      error: error.message,
+      generatedAt: previousInsight?.generatedAt || ""
+    };
+    saveState();
+    if (document.querySelector(".sourcing-feedback-card")) renderComparison();
+    if (!options.silent) toast("寻访关键词生成失败", error.message);
+  }
+}
+
 function renderComparison() {
   const job = currentJob();
   const metrics = getEvaluationMetrics(job);
@@ -1499,6 +1687,7 @@ function renderComparison() {
             <p><strong>${business.hired.length}</strong><span>已入职</span></p>
           </div>
         </div>
+        ${sourcingInsightCard(job)}
         ${metrics.unknown.length ? `<div class="evaluation-warning"><strong>还有 ${metrics.unknown.length} 位候选人没有模型质量标签</strong><span>未明确复核的人不进入召回率和精确率计算，避免指标失真。</span></div>` : ""}
         <div class="metric-compare-grid">
           ${metricCompareCard("召回率", metrics.atsRecall, metrics.aiRecall, "合理候选人中，被系统找回的比例")}
@@ -2220,6 +2409,7 @@ function deleteCandidate(candidateId, returnToImport = false) {
   const recordKey = `${job.id}:${candidate.id}`;
   delete state.decisions[recordKey];
   delete state.evaluations[recordKey];
+  delete state.sourcingInsights[job.id];
   if (!candidate.custom) {
     const deleted = new Set(state.deletedCandidates[job.id] || []);
     deleted.add(candidate.id);
@@ -2672,6 +2862,7 @@ function evaluationExportData() {
       recoveredRecommended: business.recoveredRecommended.length,
       recoveredInterviewed: business.recoveredInterviewed.length
     },
+    sourcingFeedback: state.sourcingInsights[job.id]?.result || null,
     candidates: job.candidates.map(candidate => {
       const record = candidateRecord(candidate.id, job.id);
       return {
@@ -2910,17 +3101,26 @@ function handleClick(event) {
     const stage = value === "推荐联系" && existing.stage === "未跟进" ? "待联系" : existing.stage;
     saveCandidateRecord(state.selectedCandidate, { value, reasons, note, stage });
     state.evaluations[`${state.currentJob}:${state.selectedCandidate}`] = decisionEvaluation(value);
+    delete state.sourcingInsights[state.currentJob];
     saveState();
     renderCandidateDetail(state.selectedCandidate);
     toast("复核决策已保存", `${value} · 已纳入效果复盘`);
+    if (value === "推荐联系" && SOURCING_POSITIVE_STAGES.includes(stage)) {
+      void generateSourcingKeywords({ silent: true });
+    }
     return;
   }
   if (action === "save-hiring-outcome") {
     const stage = document.getElementById("hiringStage")?.value || "未跟进";
     const stageNote = document.getElementById("hiringStageNote")?.value.trim() || "";
+    delete state.sourcingInsights[state.currentJob];
     saveCandidateRecord(state.selectedCandidate, { stage, stageNote });
     renderCandidateDetail(state.selectedCandidate);
     toast("招聘进展已更新", `${stage} · 转化漏斗已重新计算`);
+    const updatedRecord = candidateRecord(state.selectedCandidate);
+    if (updatedRecord.value === "推荐联系" && SOURCING_POSITIVE_STAGES.includes(updatedRecord.stage)) {
+      void generateSourcingKeywords({ silent: true });
+    }
     return;
   }
   if (action === "open-insight-candidate") {
@@ -2970,6 +3170,36 @@ function handleClick(event) {
   if (action === "start-analysis") { toast("AI 分析完成", "已生成复核队列和迁移证据"); renderQueue(); }
   if (action === "back-queue") renderQueue();
   if (action === "show-compare") showCompare();
+  if (action === "generate-sourcing-keywords") {
+    void generateSourcingKeywords();
+    return;
+  }
+  if (action === "copy-sourcing-term") {
+    navigator.clipboard?.writeText(actionEl.dataset.copyText || "");
+    toast("关键词已复制", actionEl.dataset.copyText || "");
+    return;
+  }
+  if (action === "copy-sourcing-query") {
+    const query = state.sourcingInsights[state.currentJob]?.result?.searchQueries?.[Number(actionEl.dataset.queryIndex)]?.query || "";
+    if (query) navigator.clipboard?.writeText(query);
+    toast("搜索组合已复制", "可粘贴到支持布尔检索的招聘网站");
+    return;
+  }
+  if (action === "copy-all-sourcing-keywords") {
+    const result = state.sourcingInsights[state.currentJob]?.result;
+    if (result) {
+      const text = [
+        `关键技术：${(result.technicalKeywords || []).map(item => item.term).join("、")}`,
+        `产品 / 平台：${(result.productKeywords || []).map(item => item.term).join("、")}`,
+        `相邻岗位：${(result.roleKeywords || []).map(item => item.term).join("、")}`,
+        `目标公司：${(result.targetCompanies || []).map(item => item.company).join("、")}`,
+        `搜索组合：\n${(result.searchQueries || []).map(item => `${item.label}：${item.query}`).join("\n")}`
+      ].join("\n");
+      navigator.clipboard?.writeText(text);
+      toast("全部寻访关键词已复制", "包含技术、产品、岗位、公司和搜索组合");
+    }
+    return;
+  }
   if (action === "copy-evaluation") {
     const metrics = getEvaluationMetrics(currentJob());
     const business = getBusinessMetrics(currentJob());

@@ -135,6 +135,108 @@ const resumeSchema = {
   }
 };
 
+const sourcingKeywordSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "summary", "sampleSize", "signalDescription", "technicalKeywords",
+    "productKeywords", "roleKeywords", "targetCompanies", "exclusionKeywords",
+    "searchQueries", "cautions"
+  ],
+  properties: {
+    summary: { type: "string" },
+    sampleSize: { type: "integer", minimum: 1, maximum: 8 },
+    signalDescription: { type: "string" },
+    technicalKeywords: {
+      type: "array",
+      minItems: 1,
+      maxItems: 10,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["term", "reason", "sourceCount"],
+        properties: {
+          term: { type: "string" },
+          reason: { type: "string" },
+          sourceCount: { type: "integer", minimum: 1, maximum: 8 }
+        }
+      }
+    },
+    productKeywords: {
+      type: "array",
+      minItems: 1,
+      maxItems: 8,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["term", "reason", "sourceCount"],
+        properties: {
+          term: { type: "string" },
+          reason: { type: "string" },
+          sourceCount: { type: "integer", minimum: 1, maximum: 8 }
+        }
+      }
+    },
+    roleKeywords: {
+      type: "array",
+      minItems: 1,
+      maxItems: 8,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["term", "reason", "sourceCount"],
+        properties: {
+          term: { type: "string" },
+          reason: { type: "string" },
+          sourceCount: { type: "integer", minimum: 1, maximum: 8 }
+        }
+      }
+    },
+    targetCompanies: {
+      type: "array",
+      minItems: 1,
+      maxItems: 8,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["company", "reason", "sourceCount"],
+        properties: {
+          company: { type: "string" },
+          reason: { type: "string" },
+          sourceCount: { type: "integer", minimum: 1, maximum: 8 }
+        }
+      }
+    },
+    exclusionKeywords: {
+      type: "array",
+      minItems: 0,
+      maxItems: 6,
+      items: { type: "string" }
+    },
+    searchQueries: {
+      type: "array",
+      minItems: 2,
+      maxItems: 5,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["label", "query", "usage"],
+        properties: {
+          label: { type: "string" },
+          query: { type: "string" },
+          usage: { type: "string" }
+        }
+      }
+    },
+    cautions: {
+      type: "array",
+      minItems: 1,
+      maxItems: 4,
+      items: { type: "string" }
+    }
+  }
+};
+
 const companyResearchSchema = {
   type: "object",
   additionalProperties: false,
@@ -1742,6 +1844,167 @@ async function analyzeResume(payload) {
   return { result, mode: AI_PROVIDER, provider: AI_PROVIDER, model: MODEL };
 }
 
+function sourcingTermEntries(candidates, extractor, limit, reason) {
+  const counts = new Map();
+  candidates.forEach(candidate => {
+    const terms = [...new Set(extractor(candidate)
+      .flatMap(value => String(value || "").split(/[、，,；;｜|/]/))
+      .map(value => value.trim())
+      .filter(value => value.length >= 2 && value.length <= 28)
+      .filter(value => !/待确认|未说明|信息不足|简历已导入|相关经历/.test(value)))];
+    terms.forEach(term => counts.set(term, (counts.get(term) || 0) + 1));
+  });
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)
+    .slice(0, limit)
+    .map(([term, sourceCount]) => ({ term, sourceCount, reason: reason(term, sourceCount) }));
+}
+
+function booleanGroup(terms) {
+  return `(${terms.map(term => `"${String(term).replace(/"/g, "")}"`).join(" OR ")})`;
+}
+
+function demoSourcingKeywords(payload) {
+  const candidates = Array.isArray(payload.candidates) ? payload.candidates.slice(0, 8) : [];
+  const job = payload.job || {};
+  const technicalKeywords = sourcingTermEntries(
+    candidates,
+    candidate => [
+      ...(candidate.facts || []),
+      ...(candidate.transferable || []),
+      ...(candidate.companyContext?.technologyPlatform || []),
+      ...(candidate.companyResearch?.technologies || [])
+    ],
+    8,
+    (_, count) => `${count} 位正向候选人的经历或技术背景中出现`
+  );
+  const productKeywords = sourcingTermEntries(
+    candidates,
+    candidate => [
+      ...(candidate.companyContext?.products || []),
+      ...(candidate.companyResearch?.products || [])
+    ],
+    6,
+    (_, count) => `${count} 位正向候选人接触过相关产品或平台`
+  );
+  const roleKeywords = sourcingTermEntries(
+    candidates,
+    candidate => [candidate.role, ...(candidate.adjacentRoles || [])],
+    6,
+    (_, count) => `${count} 位正向候选人的岗位名称或相邻岗位`
+  );
+  const companyCounts = new Map();
+  candidates.forEach(candidate => {
+    const companies = [
+      candidate.company,
+      ...(candidate.companyResearch?.resolvedEntities || [])
+        .filter(entity => entity.priority === "重点研究")
+        .map(entity => entity.name)
+    ].filter(Boolean);
+    [...new Set(companies)].forEach(company => companyCounts.set(company, (companyCounts.get(company) || 0) + 1));
+  });
+  const targetCompanies = [...companyCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([company, sourceCount]) => ({
+      company,
+      sourceCount,
+      reason: "已有正向候选人来自该公司或其重点业务主体"
+    }));
+  const fallbackTechnical = (job.model || []).slice(0, 4).map(item => ({
+    term: Array.isArray(item) ? item[0] : item.name,
+    reason: "来自岗位能力模型，建议与候选人高频经历组合检索",
+    sourceCount: Math.max(1, candidates.length)
+  }));
+  const technical = technicalKeywords.length ? technicalKeywords : fallbackTechnical;
+  const products = productKeywords.length ? productKeywords : technical.slice(0, 3);
+  const roles = roleKeywords.length ? roleKeywords : (job.adjacent || []).slice(0, 4).map(term => ({
+    term,
+    reason: "岗位模型中的相邻经历",
+    sourceCount: Math.max(1, candidates.length)
+  }));
+  const techTerms = technical.slice(0, 4).map(item => item.term);
+  const productTerms = products.slice(0, 3).map(item => item.term);
+  const roleTerms = roles.slice(0, 3).map(item => item.term);
+  const companyTerms = targetCompanies.slice(0, 4).map(item => item.company);
+  const searchQueries = [
+    {
+      label: "核心技术组合",
+      query: `${booleanGroup(techTerms)} AND ${booleanGroup(roleTerms)}`,
+      usage: "适合先扩大召回，再根据招聘网站结果补充筛选条件"
+    },
+    {
+      label: "产品 / 平台组合",
+      query: `${booleanGroup(productTerms)} AND ${booleanGroup(techTerms.slice(0, 3))}`,
+      usage: "适合岗位名称不统一、但产品和技术环境相近的候选人"
+    }
+  ];
+  if (companyTerms.length) {
+    searchQueries.push({
+      label: "目标公司定向",
+      query: `${booleanGroup(companyTerms)} AND ${booleanGroup(techTerms.slice(0, 3))}`,
+      usage: "适合在招聘网站中按公司背景进行定向猎聘"
+    });
+  }
+  return {
+    summary: `根据 ${candidates.length} 位获得 HR 正向反馈的候选人，反向提炼可用于下一轮寻访的关键词。`,
+    sampleSize: candidates.length,
+    signalDescription: payload.signalDescription || "HR 推荐联系，且已产生联系、面试、Offer 或入职进展",
+    technicalKeywords: technical,
+    productKeywords: products,
+    roleKeywords: roles,
+    targetCompanies,
+    exclusionKeywords: [],
+    searchQueries,
+    cautions: [
+      "关键词用于扩大寻访范围，不等于候选人一定匹配。",
+      "公司背景只能说明可能接触过相关环境，仍需核实个人职责。"
+    ]
+  };
+}
+
+async function generateSourcingKeywords(payload) {
+  const candidates = Array.isArray(payload.candidates) ? payload.candidates.slice(0, 8) : [];
+  if (!candidates.length) throw new Error("至少需要 1 位已获得正向招聘反馈的候选人");
+  if (!API_KEY) return { result: demoSourcingKeywords(payload), mode: "demo" };
+  const result = await callAI({
+    name: "sourcing_keyword_feedback",
+    schema: sourcingKeywordSchema,
+    system: [
+      "你是帮助招聘 HR 设计人才寻访策略的研究助手。",
+      "根据已经获得 HR 正向复核和后续招聘进展的候选人简历，反向提炼下一轮招聘网站检索词。",
+      "输出重点包括关键技术、产品或平台名称、相邻岗位名称、目标公司和可直接复制的布尔搜索式。",
+      "只使用输入中有证据的内容，不得编造候选人未经历的技术、产品或公司。",
+      "目标公司优先来自正向候选人的任职公司或已有公开研究支持的重点业务主体；不得仅凭行业常识随意列公司。",
+      "高频不等于有效。优先保留能解释候选人为何进入联系、面试、Offer 或入职阶段的差异化词语。",
+      "岗位名称可能不统一，应同时输出技术词、产品词和相邻岗位词，避免重新退化为单一关键词匹配。",
+      "搜索式采用招聘人员容易复制的 AND、OR、英文双引号格式，每组控制在可读长度内。",
+      "排除词只有在输入中存在明确误召回证据时才输出，否则返回空数组。",
+      "不得输出姓名、电话、邮箱、地址等个人敏感信息。",
+      "用简洁、通俗的中文解释每个词为什么值得使用。"
+    ].join("\n"),
+    input: `目标岗位：\n${JSON.stringify(payload.job)}\n\n正向样本筛选口径：${payload.signalDescription || "HR 推荐且已有正向招聘进展"}\n\n候选人样本：\n${JSON.stringify(candidates)}`
+  });
+  result.sampleSize = candidates.length;
+  const allowedCompanies = new Set(candidates.flatMap(candidate => [
+    candidate.company,
+    ...(candidate.companyResearch?.resolvedEntities || []).map(entity => entity.name)
+  ].filter(Boolean)));
+  result.targetCompanies = (result.targetCompanies || [])
+    .filter(item => allowedCompanies.has(item.company))
+    .map(item => ({ ...item, sourceCount: Math.max(1, Math.min(candidates.length, Number(item.sourceCount) || 1)) }));
+  if (!result.targetCompanies.length) {
+    result.targetCompanies = demoSourcingKeywords(payload).targetCompanies;
+  }
+  for (const key of ["technicalKeywords", "productKeywords", "roleKeywords"]) {
+    result[key] = (result[key] || []).map(item => ({
+      ...item,
+      sourceCount: Math.max(1, Math.min(candidates.length, Number(item.sourceCount) || 1))
+    }));
+  }
+  return { result, mode: AI_PROVIDER, provider: AI_PROVIDER, model: MODEL };
+}
+
 async function handleApi(req, res, pathname) {
   if (req.method === "GET" && pathname === "/api/health") {
     return sendJson(res, 200, {
@@ -1764,6 +2027,12 @@ async function handleApi(req, res, pathname) {
     if (pathname === "/api/analyze-resume") {
       if (!payload.resume || !payload.job) return sendJson(res, 400, { error: "简历和岗位模型不能为空" });
       return sendJson(res, 200, await analyzeResume(payload));
+    }
+    if (pathname === "/api/generate-sourcing-keywords") {
+      if (!payload.job || !Array.isArray(payload.candidates) || !payload.candidates.length) {
+        return sendJson(res, 400, { error: "岗位信息和正向候选人样本不能为空" });
+      }
+      return sendJson(res, 200, await generateSourcingKeywords(payload));
     }
     if (pathname === "/api/research-company") {
       if (!payload.company || !payload.job) return sendJson(res, 400, { error: "企业名称和目标岗位不能为空" });
