@@ -100,6 +100,9 @@ const checks = vm.runInContext(`
   const reviewResultHtml = main.innerHTML;
   renderWorkbench();
   const homeResultHtml = main.innerHTML;
+  const homeSourcingMarkup = homeResultHtml.match(/<button class="home-sourcing-window"[\\s\\S]*?<\\/button>/)?.[0] || "";
+  renderSourcingHub();
+  const sourcingHubHtml = main.innerHTML;
   renderSourcingStrategy("chip");
   const strategyHtml = main.innerHTML;
   ({
@@ -108,7 +111,7 @@ const checks = vm.runInContext(`
     workflowConnectsOutcomeAndSourcing: requirementHtml.includes('data-step="5"') && requirementHtml.includes('data-step="6"'),
     requirementHasClearPurpose: requirementHtml.includes("岗位定义") && requirementHtml.includes("下一步：校准能力标准"),
     queueUsesCompactStatus: queueHtml.includes("queue-status-line") && !queueHtml.includes('<div class="queue-stats">') && !queueHtml.includes("compare-banner"),
-    homeHasSourcingWindow: homeHtml.includes("寻访策略") && homeHtml.includes("open-sourcing-strategy"),
+    homeHasSourcingWindow: homeHtml.includes("AI 寻访策略入口") && homeHtml.includes("open-sourcing-hub"),
     homeExplainsProductMethod: ["传统关键词筛选只看", "任务场景、技术机制、责任范围和结果证据", "找回 ATS 漏选人才", "解释能力迁移路径", "用招聘结果优化寻访"].every(text => homeHtml.includes(text)),
     reviewHasThreeQuestions: ["招聘推进到哪一步", "AI 找回效果", "下一轮应该去哪里找人"].every(text => reviewHtml.includes(text)),
     reviewHasClearFunctionLabel: reviewHtml.includes("当前功能 · 招聘结果") && reviewHtml.includes("确认 AI 找回的人是否真的进入后续招聘流程"),
@@ -117,7 +120,9 @@ const checks = vm.runInContext(`
     reviewHasCollapsedDetails: reviewHtml.includes("review-advanced-details") && reviewHtml.includes("展开高级明细"),
     candidateHasClearActions: candidateHtml.includes("正在复核") && candidateHtml.includes("1. 提交 HR 决策") && candidateHtml.includes("2. 更新招聘进展"),
     reviewUsesCompactSourcingEntry: reviewResultHtml.includes("打开寻访策略") && !reviewResultHtml.includes("sourcing-keyword-grid"),
-    homePreviewsGeneratedStrategy: homeResultHtml.includes("已生成") && homeResultHtml.includes("混合键合") && homeResultHtml.includes("打开策略"),
+    homeSourcingEntryIsGeneric: homeSourcingMarkup.includes("AI 寻访策略入口") && !homeSourcingMarkup.includes("3D 先进封装工艺工程师") && !homeSourcingMarkup.includes("混合键合"),
+    sourcingHubListsExistingJobs: sourcingHubHtml.includes("已有策略的岗位") && sourcingHubHtml.includes("3D 先进封装工艺工程师") && sourcingHubHtml.includes("查看策略"),
+    sourcingHubRequiresSecondClick: sourcingHubHtml.includes('data-action="open-sourcing-strategy"') && !sourcingHubHtml.includes("sourcing-keyword-grid"),
     strategyHasAllGroups: ["关键技术", "产品 / 平台", "相邻岗位", "目标公司"].every(text => strategyHtml.includes(text)),
     strategyHasQuery: strategyHtml.includes("核心技术组合") && strategyHtml.includes("混合键合"),
     strategyHasCandidateCase: strategyHtml.includes("内置正向候选人案例") && strategyHtml.includes("林嘉") && strategyHtml.includes("ATS 漏选代表案例"),

@@ -665,17 +665,6 @@ function renderWorkbench() {
     ...recoveredItems.filter(({ job, candidate }) => !candidateRecord(candidate.id, job.id).value),
     ...recoveredItems.filter(({ job, candidate }) => candidateRecord(candidate.id, job.id).value)
   ].slice(0, 3);
-  const sourcingJob = Object.values(jobs).find(job => state.sourcingInsights[job.id]?.result)
-    || Object.values(jobs).find(job => positiveSourcingCandidates(job).length)
-    || currentJob();
-  const sourcingResult = state.sourcingInsights[sourcingJob.id]?.result;
-  const sourcingSamples = positiveSourcingCandidates(sourcingJob);
-  const sourcingPreview = sourcingResult
-    ? [
-        ...(sourcingResult.technicalKeywords || []).slice(0, 2).map(item => item.term),
-        ...(sourcingResult.roleKeywords || []).slice(0, 1).map(item => item.term)
-      ].slice(0, 3)
-    : [];
   main.innerHTML = `
     <section class="page">
       <div class="overview-hero">
@@ -719,14 +708,12 @@ function renderWorkbench() {
         </aside>
       </div>
       <div class="dashboard-body">
-        <button class="home-sourcing-window" data-action="open-sourcing-strategy" data-job-id="${sourcingJob.id}">
+        <button class="home-sourcing-window" data-action="open-sourcing-hub">
           <span class="home-sourcing-icon">寻</span>
           <span class="home-sourcing-copy">
-            <span class="eyebrow">寻访策略</span>
-            <strong>${sourcingResult ? `${sourcingJob.title} · 已生成` : sourcingSamples.length ? `${sourcingSamples.length} 份正向样本可生成策略` : "生成下一轮搜索关键词"}</strong>
-            ${sourcingPreview.length ? `<span class="home-sourcing-tags">${sourcingPreview.map(item => `<i>${escapeHtml(item)}</i>`).join("")}</span>` : ""}
+            <strong>AI 寻访策略入口</strong>
           </span>
-          <span class="home-sourcing-action">${sourcingResult ? "打开策略" : sourcingSamples.length ? "生成策略" : "查看功能"} →</span>
+          <span class="home-sourcing-action">进入 →</span>
         </button>
         <div class="section-title">
           <div><h2>招聘项目</h2><p>从一个岗位开始，校准标准并识别可迁移人才</p></div>
@@ -1797,6 +1784,54 @@ function sourcingReviewCta(job) {
     </button>`;
 }
 
+function renderSourcingHub() {
+  state.view = "sourcing";
+  setActiveSidebar();
+  renderRecentJobs();
+  const strategyJobs = Object.values(jobs).filter(job => state.sourcingInsights[job.id]?.result);
+  main.innerHTML = `
+    <section class="page">
+      <div class="page-head" style="padding-bottom:18px">
+        <div class="breadcrumbs"><button class="btn ghost small" data-action="go-workbench">← 返回首页</button><span>/</span><b>AI 寻访策略</b></div>
+        <div class="title-row">
+          <div class="title-copy">
+            <span class="home-sourcing-icon">寻</span>
+            <div><span class="function-label">功能入口</span><h1>AI 寻访策略</h1><p>选择岗位查看已生成的搜索关键词与目标公司</p></div>
+          </div>
+        </div>
+      </div>
+      <div class="page-body sourcing-hub-body">
+        <div class="section-title">
+          <div><h2>已有策略的岗位</h2><p>共 ${strategyJobs.length} 个岗位</p></div>
+        </div>
+        ${strategyJobs.length ? `
+          <div class="sourcing-job-grid">
+            ${strategyJobs.map(job => {
+              const insight = state.sourcingInsights[job.id];
+              const updated = insight.generatedAt
+                ? new Date(insight.generatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })
+                : "已生成";
+              return `
+                <button class="sourcing-job-card" data-action="open-sourcing-strategy" data-job-id="${job.id}">
+                  <span class="job-icon ${job.id}">${jobIcon(job)}</span>
+                  <span>
+                    <strong>${escapeHtml(job.title)}</strong>
+                    <small>${escapeHtml(job.industry)} · ${insight.result.sampleSize || insight.candidateIds?.length || 0} 份正向样本</small>
+                  </span>
+                  <em>${updated} 更新</em>
+                  <b>查看策略 →</b>
+                </button>`;
+            }).join("")}
+          </div>` : `
+          <div class="card sourcing-hub-empty">
+            <strong>暂无已生成的寻访策略</strong>
+            <p>完成候选人复核并回填招聘进展后，可在招聘结果页生成策略。</p>
+            <button class="btn primary" data-action="go-workbench">返回工作台</button>
+          </div>`}
+      </div>
+    </section>`;
+}
+
 function renderSourcingStrategy(jobId = state.currentJob) {
   if (jobs[jobId]) state.currentJob = jobId;
   const job = currentJob();
@@ -1807,7 +1842,7 @@ function renderSourcingStrategy(jobId = state.currentJob) {
     <section class="page">
       ${stepHeader(6, "寻访策略")}
       <div class="page-body sourcing-page-body">
-        <div class="page-purpose-bar"><span>寻访策略</span><strong>把有效候选人的共同特征变成下一轮搜索词</strong><small><button class="text-action" data-action="show-compare">查看结果依据</button></small></div>
+        <div class="page-purpose-bar"><span>寻访策略</span><strong>把有效候选人的共同特征变成下一轮搜索词</strong><small><button class="text-action" data-action="open-sourcing-hub">返回策略列表</button></small></div>
         ${sourcingInsightCard(job)}
         <details class="sourcing-boundary-note compact-details">
           <summary>使用边界与搜索建议</summary>
@@ -3346,6 +3381,10 @@ function handleClick(event) {
   if (action === "start-analysis") { toast("AI 分析完成", "已生成复核队列和迁移证据"); renderQueue(); }
   if (action === "back-queue") renderQueue();
   if (action === "show-compare") showCompare();
+  if (action === "open-sourcing-hub") {
+    renderSourcingHub();
+    return;
+  }
   if (action === "open-sourcing-strategy") {
     renderSourcingStrategy(actionEl.dataset.jobId || state.currentJob);
     return;
