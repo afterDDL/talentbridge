@@ -683,7 +683,12 @@ function renderWorkbench() {
         <div class="hero-copy">
           <p class="eyebrow">AI 招聘闭环工作台</p>
           <h1>找到关键词之外，真正值得被看见的人</h1>
-          <p>把岗位和经历还原为任务、技术与能力证据，找回关键词筛选遗漏的人才；再用 HR 决策和招聘结果持续优化下一轮寻访。</p>
+          <p>传统关键词筛选只看候选人“写了什么”，难以理解不同岗位名称、技术路线和行业经历背后相通的任务与能力，既可能漏掉具备迁移潜力的人才，也可能放入只有关键词却缺少真实经验的人选。TalentBridge 结合 JD、HR 的业务理解与行业研究，将候选人经历还原为任务场景、技术机制、责任范围和结果证据，说明为什么值得联系、哪些能力仍需验证；再用 HR 复核和后续招聘结果反向生成下一轮寻访关键词，形成可持续优化的招聘闭环。</p>
+          <div class="hero-capabilities">
+            <span><b>01</b> 找回 ATS 漏选人才</span>
+            <span><b>02</b> 解释能力迁移路径</span>
+            <span><b>03</b> 用招聘结果优化寻访</span>
+          </div>
           <div class="hero-actions">
             <button class="btn primary" data-action="open-current">进入当前招聘项目</button>
             <button class="btn secondary" data-action="new-project">＋ 新建岗位</button>

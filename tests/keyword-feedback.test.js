@@ -109,6 +109,7 @@ const checks = vm.runInContext(`
     requirementHasClearPurpose: requirementHtml.includes("岗位定义") && requirementHtml.includes("下一步：校准能力标准"),
     queueUsesCompactStatus: queueHtml.includes("queue-status-line") && !queueHtml.includes('<div class="queue-stats">') && !queueHtml.includes("compare-banner"),
     homeHasSourcingWindow: homeHtml.includes("随时可查 · 寻访策略") && homeHtml.includes("open-sourcing-strategy"),
+    homeExplainsProductMethod: ["传统关键词筛选只看", "任务场景、技术机制、责任范围和结果证据", "找回 ATS 漏选人才", "解释能力迁移路径", "用招聘结果优化寻访"].every(text => homeHtml.includes(text)),
     reviewHasThreeQuestions: ["招聘推进到哪一步", "AI 多找回的人，后来真的有效吗", "下一轮应该去哪里找人"].every(text => reviewHtml.includes(text)),
     reviewHasClearFunctionLabel: reviewHtml.includes("当前功能 · 招聘结果") && reviewHtml.includes("确认 AI 找回的人是否真的进入后续招聘流程"),
     reviewUsesSingleFunnel: reviewHtml.includes("recruiting-funnel") && !reviewHtml.includes("business-outcome-card") && !reviewHtml.includes("outcome-mini-metrics"),
