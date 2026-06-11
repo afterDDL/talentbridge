@@ -235,6 +235,22 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .insight-queue-button { width: 100%; margin-top: 10px; padding: 8px 10px; border: 1px solid #b9cbff; border-radius: 6px; background: var(--blue-soft); color: #245bdb; font-size: 10px; font-weight: 600; cursor: pointer; }
 .insight-queue-button:hover { background: #e6edff; }
 .dashboard-body { padding: 22px 28px 36px; }
+.home-sourcing-window {
+  display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 15px;
+  width: 100%; margin-bottom: 22px; padding: 16px 18px; border: 1px solid #b9cbff; border-radius: 10px;
+  background: linear-gradient(110deg, #f5f8ff, #fff 70%); color: var(--text); text-align: left;
+  box-shadow: 0 3px 12px rgba(51,112,255,.07); cursor: pointer; transition: .16s ease;
+}
+.home-sourcing-window:hover { border-color: #83a4ff; box-shadow: 0 7px 22px rgba(51,112,255,.12); transform: translateY(-1px); }
+.home-sourcing-icon, .review-sourcing-icon { display: grid; place-items: center; border-radius: 10px; background: linear-gradient(135deg, var(--blue), #7857d8); color: white; font-weight: 700; }
+.home-sourcing-icon { width: 46px; height: 46px; font-size: 17px; }
+.home-sourcing-copy { min-width: 0; }
+.home-sourcing-copy > strong, .home-sourcing-copy > small { display: block; }
+.home-sourcing-copy > strong { font-size: 14px; }
+.home-sourcing-copy > small { margin-top: 5px; color: var(--text-2); font-size: 10px; line-height: 1.5; }
+.home-sourcing-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.home-sourcing-tags i { padding: 3px 6px; border-radius: 4px; background: white; color: #315dca; font-size: 9px; font-style: normal; box-shadow: 0 0 0 1px #dce5ff; }
+.home-sourcing-action { color: var(--blue); font-size: 11px; font-weight: 600; white-space: nowrap; }
 .section-title { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 13px; }
 .section-title h2 { margin: 0; font-size: 17px; }
 .section-title p { margin: 4px 0 0; color: var(--text-2); font-size: 12px; }
@@ -418,6 +434,37 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .evaluation-options button.selected.irrelevant { border-color: #e4aaa6; background: var(--red-soft); color: #b52b25; }
 .evaluation-options button.selected.unknown { border-color: #e6c08c; background: var(--amber-soft); color: #9a5109; }
 .evaluation-footnote { margin: 14px 0 0; color: var(--text-3); font-size: 11px; text-align: center; }
+.review-purpose { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; padding: 13px 16px; border: 1px solid #d9e2f7; border-radius: 8px; background: #f7f9fd; }
+.review-purpose strong { flex: 0 0 auto; font-size: 12px; }
+.review-purpose span { color: var(--text-2); font-size: 11px; line-height: 1.5; }
+.review-section-title { display: flex; align-items: flex-start; gap: 10px; margin: 24px 0 11px; }
+.review-section-title:first-of-type { margin-top: 0; }
+.review-section-title > span { display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-size: 10px; font-weight: 700; }
+.review-section-title h2 { margin: 1px 0 0; font-size: 16px; }
+.review-section-title p { margin: 4px 0 0; color: var(--text-3); font-size: 10px; }
+.review-sourcing-cta {
+  display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 14px;
+  width: 100%; margin-bottom: 18px; padding: 16px 18px; border: 1px solid #bce8e4; border-radius: 9px;
+  background: linear-gradient(110deg, #f0fbfa, #fff); color: var(--text); text-align: left; cursor: pointer;
+}
+.review-sourcing-cta:hover { border-color: #79cdc7; box-shadow: 0 5px 16px rgba(15,159,154,.09); }
+.review-sourcing-icon { width: 42px; height: 42px; background: linear-gradient(135deg, var(--cyan), var(--blue)); }
+.review-sourcing-cta small, .review-sourcing-cta strong, .review-sourcing-cta em { display: block; }
+.review-sourcing-cta small { color: #087f7a; font-size: 9px; font-weight: 600; }
+.review-sourcing-cta strong { margin-top: 3px; font-size: 13px; }
+.review-sourcing-cta em { margin-top: 5px; color: var(--text-3); font-size: 9px; font-style: normal; }
+.review-sourcing-cta > b { color: #087f7a; font-size: 11px; white-space: nowrap; }
+.review-advanced-details { margin-top: 16px; border: 1px solid var(--line); border-radius: 8px; background: white; }
+.review-advanced-details > summary { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 16px; cursor: pointer; list-style: none; }
+.review-advanced-details > summary::-webkit-details-marker { display: none; }
+.review-advanced-details > summary strong, .review-advanced-details > summary small { display: block; }
+.review-advanced-details > summary strong { font-size: 12px; }
+.review-advanced-details > summary small { margin-top: 4px; color: var(--text-3); font-size: 9px; }
+.review-advanced-details > summary b { color: var(--blue); font-size: 10px; }
+.review-advanced-details[open] > summary { border-bottom: 1px solid var(--line-soft); }
+.review-advanced-details[open] > summary b::before { content: "收起 · "; }
+.review-advanced-body { display: grid; gap: 14px; padding: 16px; background: #fafbfc; }
+.review-export-actions { display: flex; justify-content: flex-end; gap: 7px; }
 .business-funnel-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
 .business-outcome-card { position: relative; overflow: hidden; padding: 16px 17px; }
 .business-outcome-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--blue); }
@@ -439,6 +486,18 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .outcome-mini-metrics strong { font-size: 18px; }
 .outcome-mini-metrics span { margin-top: 3px; color: var(--text-3); font-size: 9px; }
 .sourcing-feedback-card { margin-bottom: 16px; overflow: hidden; }
+.sourcing-page-head { padding-bottom: 18px; }
+.sourcing-page-body { max-width: 1240px; margin: 0 auto; }
+.sourcing-page-explainer { display: grid; grid-template-columns: 30px 1fr auto 30px 1fr auto 30px 1fr; align-items: center; gap: 10px; margin-bottom: 16px; padding: 14px 16px; border: 1px solid var(--line-soft); border-radius: 8px; background: white; }
+.sourcing-page-explainer > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-size: 10px; font-weight: 700; }
+.sourcing-page-explainer > p { margin: 0; }
+.sourcing-page-explainer strong, .sourcing-page-explainer small { display: block; }
+.sourcing-page-explainer strong { font-size: 11px; }
+.sourcing-page-explainer small { margin-top: 3px; color: var(--text-3); font-size: 9px; line-height: 1.4; }
+.sourcing-page-explainer > i { color: #b3bac5; font-style: normal; }
+.sourcing-boundary-note { padding: 13px 15px; border: 1px solid #e3ddf5; border-radius: 7px; background: #faf8ff; }
+.sourcing-boundary-note strong { font-size: 11px; }
+.sourcing-boundary-note p { margin: 5px 0 0; color: var(--text-2); font-size: 10px; line-height: 1.6; }
 .sourcing-feedback-intro, .sourcing-feedback-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 19px 20px; }
 .sourcing-feedback-intro h2, .sourcing-feedback-head h2, .sourcing-feedback-empty h2, .sourcing-feedback-loading h2 { margin: 4px 0 6px; font-size: 17px; }
 .sourcing-feedback-intro p:not(.eyebrow), .sourcing-feedback-head p:not(.eyebrow), .sourcing-feedback-empty p, .sourcing-feedback-loading p { margin: 0; color: var(--text-2); font-size: 11px; line-height: 1.65; }
@@ -784,6 +843,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   .business-funnel-grid { grid-template-columns: 1fr 1fr; }
   .outcome-insight-card { align-items: flex-start; flex-direction: column; }
   .sourcing-keyword-grid { grid-template-columns: 1fr 1fr; }
+  .sourcing-page-explainer { grid-template-columns: 28px 1fr; }
+  .sourcing-page-explainer > i { display: none; }
   .industry-fact-grid { grid-template-columns: 1fr 1fr; }
   .operating-structure > div { grid-template-columns: 1fr 1fr; }
   .migration-map { grid-template-columns: 1fr 32px 1.1fr 32px 1fr; }
@@ -791,6 +852,9 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 }
 
 @media (max-width: 760px) {
+  .home-sourcing-window, .review-sourcing-cta { grid-template-columns: 40px 1fr; }
+  .home-sourcing-action, .review-sourcing-cta > b { grid-column: 2; }
+  .review-purpose { align-items: flex-start; flex-direction: column; }
   .sourcing-feedback-intro, .sourcing-feedback-head, .sourcing-feedback-empty { flex-direction: column; }
   .sourcing-feedback-actions { justify-content: flex-start; }
   .sourcing-keyword-grid { grid-template-columns: 1fr; }

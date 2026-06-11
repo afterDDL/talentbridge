@@ -66,8 +66,10 @@ vm.runInContext(fs.readFileSync("app.js", "utf8"), sandbox);
 
 const checks = vm.runInContext(`
   startDemo();
+  renderWorkbench();
+  const homeHtml = main.innerHTML;
   renderComparison();
-  const emptyHtml = main.innerHTML;
+  const reviewHtml = main.innerHTML;
   state.sourcingInsights.chip = {
     status: "ready",
     generatedAt: new Date().toISOString(),
@@ -85,13 +87,20 @@ const checks = vm.runInContext(`
     }
   };
   renderComparison();
-  const resultHtml = main.innerHTML;
+  const reviewResultHtml = main.innerHTML;
+  renderWorkbench();
+  const homeResultHtml = main.innerHTML;
+  renderSourcingStrategy("chip");
+  const strategyHtml = main.innerHTML;
   ({
-    emptyHasEntry: emptyHtml.includes("生成寻访关键词"),
-    emptyHasSampleCount: emptyHtml.includes("当前已有 3 位"),
-    resultHasAllGroups: ["关键技术", "产品 / 平台", "相邻岗位", "目标公司"].every(text => resultHtml.includes(text)),
-    resultHasQuery: resultHtml.includes("核心技术组合") && resultHtml.includes("混合键合"),
-    resultHasCopy: resultHtml.includes("copy-sourcing-query") && resultHtml.includes("copy-all-sourcing-keywords")
+    homeHasSourcingWindow: homeHtml.includes("随时可查 · 寻访策略") && homeHtml.includes("open-sourcing-strategy"),
+    reviewHasThreeQuestions: ["招聘推进到哪一步", "AI 多找回的人，后来真的有效吗", "下一轮应该去哪里找人"].every(text => reviewHtml.includes(text)),
+    reviewHasCollapsedDetails: reviewHtml.includes("review-advanced-details") && reviewHtml.includes("展开高级明细"),
+    reviewUsesCompactSourcingEntry: reviewResultHtml.includes("打开寻访策略") && !reviewResultHtml.includes("sourcing-keyword-grid"),
+    homePreviewsGeneratedStrategy: homeResultHtml.includes("已有可用搜索策略") && homeResultHtml.includes("混合键合"),
+    strategyHasAllGroups: ["关键技术", "产品 / 平台", "相邻岗位", "目标公司"].every(text => strategyHtml.includes(text)),
+    strategyHasQuery: strategyHtml.includes("核心技术组合") && strategyHtml.includes("混合键合"),
+    strategyHasCopy: strategyHtml.includes("copy-sourcing-query") && strategyHtml.includes("copy-all-sourcing-keywords")
   });
 `, sandbox);
 

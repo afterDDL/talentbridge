@@ -658,6 +658,18 @@ function renderWorkbench() {
     ...recoveredItems.filter(({ job, candidate }) => !candidateRecord(candidate.id, job.id).value),
     ...recoveredItems.filter(({ job, candidate }) => candidateRecord(candidate.id, job.id).value)
   ].slice(0, 3);
+  const sourcingJob = Object.values(jobs).find(job => state.sourcingInsights[job.id]?.result)
+    || Object.values(jobs).find(job => positiveSourcingCandidates(job).length)
+    || currentJob();
+  const sourcingResult = state.sourcingInsights[sourcingJob.id]?.result;
+  const sourcingSamples = positiveSourcingCandidates(sourcingJob);
+  const sourcingPreview = sourcingResult
+    ? [
+        ...(sourcingResult.technicalKeywords || []).slice(0, 3).map(item => item.term),
+        ...(sourcingResult.productKeywords || []).slice(0, 1).map(item => item.term),
+        ...(sourcingResult.targetCompanies || []).slice(0, 1).map(item => item.company)
+      ]
+    : [];
   main.innerHTML = `
     <section class="page">
       <div class="overview-hero">
@@ -696,6 +708,16 @@ function renderWorkbench() {
         </aside>
       </div>
       <div class="dashboard-body">
+        <button class="home-sourcing-window" data-action="open-sourcing-strategy" data-job-id="${sourcingJob.id}">
+          <span class="home-sourcing-icon">寻</span>
+          <span class="home-sourcing-copy">
+            <span class="eyebrow">随时可查 · 寻访策略</span>
+            <strong>${sourcingResult ? `${sourcingJob.title}已有可用搜索策略` : sourcingSamples.length ? `${sourcingSamples.length} 份正向样本等待提炼` : "把招聘结果变成下一轮搜索关键词"}</strong>
+            <small>${sourcingResult ? "已根据真实招聘进展生成关键技术、产品平台、相邻岗位和目标公司。" : "完成候选人复核与招聘结果回填后，系统会反向生成可复制的招聘网站搜索组合。"}</small>
+            ${sourcingPreview.length ? `<span class="home-sourcing-tags">${sourcingPreview.map(item => `<i>${escapeHtml(item)}</i>`).join("")}</span>` : ""}
+          </span>
+          <span class="home-sourcing-action">${sourcingResult ? "查看并复制" : sourcingSamples.length ? "立即生成" : "了解使用方法"} →</span>
+        </button>
         <div class="section-title">
           <div><h2>招聘项目</h2><p>从一个岗位开始，校准标准并识别可迁移人才</p></div>
           <button class="btn ghost" data-action="all-projects">查看全部</button>
@@ -1618,7 +1640,8 @@ async function generateSourcingKeywords(options = {}) {
   const previousInsight = state.sourcingInsights[job.id];
   const previous = previousInsight?.result;
   state.sourcingInsights[job.id] = { status: "loading", result: previous || null };
-  if (document.querySelector(".sourcing-feedback-card")) renderComparison();
+  if (state.view === "sourcing") renderSourcingStrategy(job.id);
+  else if (document.querySelector(".sourcing-feedback-card")) renderComparison();
   try {
     const candidates = await Promise.all(samples.map(candidate => sourcingCandidatePayload(candidate, job)));
     const data = await apiRequest("/api/generate-sourcing-keywords", {
@@ -1633,7 +1656,8 @@ async function generateSourcingKeywords(options = {}) {
       candidateIds: samples.map(candidate => candidate.id)
     };
     saveState();
-    if (document.querySelector(".sourcing-feedback-card")) renderComparison();
+    if (state.view === "sourcing") renderSourcingStrategy(job.id);
+    else if (document.querySelector(".sourcing-feedback-card")) renderComparison();
     toast(options.silent ? "寻访关键词已自动更新" : "寻访关键词已生成", `已从 ${samples.length} 份正向候选人经历中提炼`);
   } catch (error) {
     state.sourcingInsights[job.id] = {
@@ -1643,9 +1667,69 @@ async function generateSourcingKeywords(options = {}) {
       generatedAt: previousInsight?.generatedAt || ""
     };
     saveState();
-    if (document.querySelector(".sourcing-feedback-card")) renderComparison();
+    if (state.view === "sourcing") renderSourcingStrategy(job.id);
+    else if (document.querySelector(".sourcing-feedback-card")) renderComparison();
     if (!options.silent) toast("寻访关键词生成失败", error.message);
   }
+}
+
+function sourcingReviewCta(job) {
+  const samples = positiveSourcingCandidates(job);
+  const result = state.sourcingInsights[job.id]?.result;
+  const preview = result
+    ? [
+        ...(result.technicalKeywords || []).slice(0, 3).map(item => item.term),
+        ...(result.productKeywords || []).slice(0, 1).map(item => item.term),
+        ...(result.targetCompanies || []).slice(0, 1).map(item => item.company)
+      ]
+    : [];
+  return `
+    <button class="review-sourcing-cta" data-action="open-sourcing-strategy" data-job-id="${job.id}">
+      <span class="review-sourcing-icon">寻</span>
+      <span>
+        <small>${result ? "已生成寻访策略" : samples.length ? `${samples.length} 份正向样本可用` : "等待正向招聘结果"}</small>
+        <strong>${result ? "查看下一轮招聘网站搜索词" : "把有效候选人的共同特征变成搜索词"}</strong>
+        <em>${preview.length ? preview.map(escapeHtml).join(" · ") : "关键技术 · 产品平台 · 相邻岗位 · 目标公司"}</em>
+      </span>
+      <b>打开寻访策略 →</b>
+    </button>`;
+}
+
+function renderSourcingStrategy(jobId = state.currentJob) {
+  if (jobs[jobId]) state.currentJob = jobId;
+  const job = currentJob();
+  state.view = "sourcing";
+  setActiveSidebar();
+  renderRecentJobs();
+  main.innerHTML = `
+    <section class="page">
+      <div class="page-head sourcing-page-head">
+        <div class="breadcrumbs"><button class="btn ghost small" data-action="go-workbench">← 返回首页</button><span>/</span><b>寻访策略</b></div>
+        <div class="title-row">
+          <div class="title-copy">
+            <span class="job-icon ${job.id}">${jobIcon(job)}</span>
+            <div><h1>下一轮去哪里找人</h1><p>${job.title} · 根据真实招聘结果反向生成关键词与目标公司</p></div>
+          </div>
+          <div class="title-actions">
+            <button class="btn secondary" data-action="show-compare">查看招聘效果</button>
+          </div>
+        </div>
+      </div>
+      <div class="page-body sourcing-page-body">
+        <div class="sourcing-page-explainer">
+          <span>1</span><p><strong>只看正向结果</strong><small>HR 推荐且已经联系、面试、Offer 或入职</small></p>
+          <i>→</i>
+          <span>2</span><p><strong>提炼有效信号</strong><small>技术、产品平台、相邻岗位和公司背景</small></p>
+          <i>→</i>
+          <span>3</span><p><strong>用于下一轮搜索</strong><small>复制关键词或布尔搜索组合到招聘网站</small></p>
+        </div>
+        ${sourcingInsightCard(job)}
+        <div class="sourcing-boundary-note">
+          <strong>怎么使用更稳妥？</strong>
+          <p>先用技术词和相邻岗位扩大召回，再叠加产品或目标公司缩小范围。关键词只负责帮 HR 找到更多可能的人，不替代后续简历分析和人工判断。</p>
+        </div>
+      </div>
+    </section>`;
 }
 
 function renderComparison() {
@@ -1660,21 +1744,26 @@ function renderComparison() {
       <div class="page-head" style="padding-bottom:18px">
         <div class="breadcrumbs"><button class="btn ghost small" data-action="back-queue">← 返回复核队列</button><span>/</span><b>效果复盘</b></div>
         <div class="title-row">
-          <div class="title-copy"><div><h1>招聘结果与 AI 找回效果</h1><p>${job.title} · 从 HR 复核一路追踪到面试、Offer 与入职</p></div></div>
+          <div class="title-copy"><div><h1>这轮招聘进行得怎么样？</h1><p>${job.title} · 用真实复核和招聘进展回答三个业务问题</p></div></div>
           <div class="title-actions">
             <button class="btn secondary" data-action="copy-evaluation">复制摘要</button>
-            <button class="btn secondary" data-action="export-evaluation-csv">导出 CSV</button>
-            <button class="btn primary" data-action="export-evaluation-json">导出 JSON</button>
+            <button class="btn primary" data-action="open-sourcing-strategy" data-job-id="${job.id}">打开寻访策略</button>
           </div>
         </div>
       </div>
       <div class="page-body">
+        <div class="review-purpose">
+          <strong>这个页面只回答三件事</strong>
+          <span>① 招聘推进到哪一步　② AI 多找回的人是否有效　③ 下一轮应该用什么方式继续找人</span>
+        </div>
+        <div class="review-section-title"><span>01</span><div><h2>招聘推进到哪一步？</h2><p>先看实际转化，不看模型术语。</p></div></div>
         <div class="business-funnel-grid">
           ${businessOutcomeCard("完成复核", business.reviewed.length, `${business.reviewRate}% 候选人已有 HR 结论`, "blue")}
           ${businessOutcomeCard("推荐联系", business.recommended.length, `${business.contactRate}% 已实际联系`, "cyan")}
           ${businessOutcomeCard("进入面试", business.interviewed.length, `${business.interviewRate}% 联系后进入面试`, "purple")}
           ${businessOutcomeCard("Offer / 入职", business.offers.length, `${business.offerRate}% 面试后获得 Offer`, "green")}
         </div>
+        <div class="review-section-title"><span>02</span><div><h2>AI 多找回的人，后来真的有效吗？</h2><p>只用 HR 决策和后续招聘结果验证，不让 AI 自己证明自己。</p></div></div>
         <div class="card outcome-insight-card">
           <div>
             <p class="eyebrow">AI 增量价值</p>
@@ -1687,7 +1776,6 @@ function renderComparison() {
             <p><strong>${business.hired.length}</strong><span>已入职</span></p>
           </div>
         </div>
-        ${sourcingInsightCard(job)}
         ${metrics.unknown.length ? `<div class="evaluation-warning"><strong>还有 ${metrics.unknown.length} 位候选人没有模型质量标签</strong><span>未明确复核的人不进入召回率和精确率计算，避免指标失真。</span></div>` : ""}
         <div class="metric-compare-grid">
           ${metricCompareCard("召回率", metrics.atsRecall, metrics.aiRecall, "合理候选人中，被系统找回的比例")}
@@ -1699,35 +1787,46 @@ function renderComparison() {
             ${(business.topReasons.slice(0, 2).map(([reason, count]) => `<div><span>${reason}</span><b>${count} 次</b></div>`).join("")) || `<div><span>尚未填写结构化理由</span><b>待补充</b></div>`}
           </div>
         </div>
-        <div class="card result-map-card">
-          <div class="card-head"><div><h2>候选人流向</h2><p>清楚看到两种筛选方式在哪里一致、在哪里产生增量</p></div></div>
-          <div class="card-body">
-            <div class="result-columns">
-              ${resultColumn("ATS 与 AI 共同命中", metrics.shared, "blue", "直接相关证据较充分")}
-              ${resultColumn("AI 增量找回", metrics.recovered, "cyan", "关键词未命中，但存在迁移路径")}
-              ${resultColumn("仍需人工判断", metrics.missed, "amber", "信息不足或关键差距明确")}
+        <div class="review-section-title"><span>03</span><div><h2>下一轮应该去哪里找人？</h2><p>把已验证的候选人特征反向变成搜索词，而不是重新从 JD 猜关键词。</p></div></div>
+        ${sourcingReviewCta(job)}
+        <details class="review-advanced-details">
+          <summary><span><strong>查看候选人明细与模型评估</strong><small>候选人流向、逐人招聘进展、人工质量标签和数据导出</small></span><b>展开高级明细</b></summary>
+          <div class="review-advanced-body">
+            <div class="review-export-actions">
+              <button class="btn secondary small" data-action="export-evaluation-csv">导出明细 CSV</button>
+              <button class="btn secondary small" data-action="export-evaluation-json">导出评估 JSON</button>
+            </div>
+            <div class="card result-map-card">
+              <div class="card-head"><div><h2>候选人流向</h2><p>查看 ATS 与 AI 在哪些人选上产生差异</p></div></div>
+              <div class="card-body">
+                <div class="result-columns">
+                  ${resultColumn("ATS 与 AI 共同命中", metrics.shared, "blue", "直接相关证据较充分")}
+                  ${resultColumn("AI 增量找回", metrics.recovered, "cyan", "关键词未命中，但存在迁移路径")}
+                  ${resultColumn("仍需人工判断", metrics.missed, "amber", "信息不足或关键差距明确")}
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><div><h2>复核与招聘进展明细</h2><p>AI 建议、HR 决策理由和后续结果</p></div><span class="tag blue">${business.reviewed.length}/${job.candidates.length} 已复核</span></div>
+              <div class="card-body" style="padding:0">
+                <table class="candidate-table feedback-table">
+                  <thead><tr><th>候选人</th><th>AI 建议</th><th>HR 决策</th><th>核心理由</th><th>招聘进展</th><th>更新时间</th></tr></thead>
+                  <tbody>${job.candidates.map(feedbackRow).join("")}</tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><div><h2>模型质量人工标签</h2><p>用于计算召回率和精确率的人工标准答案</p></div><span class="tag gray">${metrics.evaluated.length}/${job.candidates.length} 已标注</span></div>
+              <div class="card-body" style="padding:0">
+                <table class="candidate-table evaluation-table">
+                  <thead><tr><th>候选人</th><th>ATS</th><th>AI 建议</th><th>人工标准答案</th><th>结果说明</th></tr></thead>
+                  <tbody>${job.candidates.map(evaluationRow).join("")}</tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="card">
-          <div class="card-head"><div><h2>复核与招聘进展明细</h2><p>将 AI 建议、HR 决策理由和后续招聘结果放在同一张表里</p></div><span class="tag blue">${business.reviewed.length}/${job.candidates.length} 已复核</span></div>
-          <div class="card-body" style="padding:0">
-            <table class="candidate-table feedback-table">
-              <thead><tr><th>候选人</th><th>AI 建议</th><th>HR 决策</th><th>核心理由</th><th>招聘进展</th><th>更新时间</th></tr></thead>
-              <tbody>${job.candidates.map(feedbackRow).join("")}</tbody>
-            </table>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-head"><div><h2>模型质量人工标签</h2><p>复核决策会自动同步，也可在这里单独校正，用于计算召回率和精确率</p></div><span class="tag gray">${metrics.evaluated.length}/${job.candidates.length} 已标注</span></div>
-          <div class="card-body" style="padding:0">
-            <table class="candidate-table evaluation-table">
-              <thead><tr><th>候选人</th><th>ATS</th><th>AI 建议</th><th>人工标准答案</th><th>结果说明</th></tr></thead>
-              <tbody>${job.candidates.map(evaluationRow).join("")}</tbody>
-            </table>
-          </div>
-        </div>
-        <p class="evaluation-footnote">注：当前 Demo 指标用于验证产品逻辑，不代表生产环境准确率。正式评估需扩大样本，并由业务专家进行盲标。</p>
+        </details>
+        <p class="evaluation-footnote">当前 Demo 指标用于验证产品逻辑；正式评估仍需扩大样本，并由业务专家盲标。</p>
       </div>
     </section>`;
 }
@@ -3170,6 +3269,10 @@ function handleClick(event) {
   if (action === "start-analysis") { toast("AI 分析完成", "已生成复核队列和迁移证据"); renderQueue(); }
   if (action === "back-queue") renderQueue();
   if (action === "show-compare") showCompare();
+  if (action === "open-sourcing-strategy") {
+    renderSourcingStrategy(actionEl.dataset.jobId || state.currentJob);
+    return;
+  }
   if (action === "generate-sourcing-keywords") {
     void generateSourcingKeywords();
     return;
