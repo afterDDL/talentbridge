@@ -680,7 +680,7 @@ function renderWorkbench() {
           <div class="hero-actions">
             <button class="btn primary" data-action="open-current">进入当前招聘项目</button>
             <button class="btn secondary" data-action="new-project">＋ 新建岗位</button>
-            <button class="btn ghost" data-action="start-demo">▶ 查看完整闭环演示</button>
+            <button class="btn ghost" data-action="start-demo">打开示例工作区</button>
           </div>
         </div>
         <aside class="hero-insight">
@@ -745,7 +745,7 @@ function startDemo() {
   state.sourcingInsights.chip = builtInSourcingInsight();
   saveState();
   renderQueue();
-  toast("标准演示已就绪", "先打开“林嘉”，查看 2.5D → 3D 的能力迁移路径");
+  toast("示例工作区已打开", "可以先查看“林嘉”的 2.5D → 3D 能力迁移分析");
 }
 
 function builtInSourcingInsight() {
@@ -814,63 +814,89 @@ function renderGuide() {
   main.innerHTML = `
     <section class="page">
       <div class="page-head" style="padding-bottom:20px">
-        <div class="breadcrumbs"><b>产品说明</b></div>
+        <div class="breadcrumbs"><b>帮助中心</b><span>/</span><span>使用指南</span></div>
         <div class="title-row">
-          <div class="title-copy"><div><h1>TalentBridge 演示指南</h1><p>面向评审与首次用户的产品价值、操作路径和决策边界</p></div></div>
-          <div class="title-actions"><button class="btn secondary" data-action="reset-demo">重置演示数据</button><button class="btn primary" data-action="start-demo">开始标准演示</button></div>
+          <div class="title-copy"><div><h1>TalentBridge 使用指南</h1><p>从创建岗位、分析候选人到回填招聘结果，完成一次可追溯的人才筛选</p></div></div>
+          <div class="title-actions"><button class="btn secondary" data-action="start-demo">打开示例工作区</button><button class="btn primary" data-action="new-project">创建招聘项目</button></div>
         </div>
       </div>
       <div class="page-body">
-        <div class="guide-hero card">
-          <div><p class="eyebrow">一句话价值</p><h2>不只匹配候选人说过什么，更理解他做过什么，以及这些经验还能用在哪里。</h2></div>
-          <div class="guide-boundary"><span>AI</span><p><strong>辅助召回与解释</strong><br>不自动淘汰，不替代 HR 作录用决定。</p></div>
+        <div class="guide-hero guide-hero-product card">
+          <div>
+            <p class="eyebrow">推荐工作方式</p>
+            <h2>先让系统理解岗位，再判断候选人是否解决过相似问题。</h2>
+            <p class="guide-hero-copy">TalentBridge 会把 JD、招聘经理的业务理解和候选人经历放进同一套分析框架。AI 负责整理证据与提出假设，HR 负责确认事实、做出判断并回填结果。</p>
+          </div>
+          <div class="guide-flow" aria-label="产品工作流">
+            <span>岗位理解</span><i>→</i><span>能力校准</span><i>→</i><span>人才分析</span><i>→</i><span>人工复核</span><i>→</i><span>结果复盘</span>
+          </div>
         </div>
-        <div class="guide-grid">
-          <section class="card guide-script">
-            <div class="card-head"><div><h2>3 分钟演示路径</h2><p>建议按以下顺序向评委展示</p></div><span class="tag blue">约 2 分 40 秒</span></div>
-            <div class="card-body">
-              ${guideStep("00:00–00:30", "问题与岗位", "进入 3D 先进封装岗位，说明关键词 ATS 无法识别 2.5D 经验的迁移价值。", "岗位需求")}
-              ${guideStep("00:30–01:00", "能力校准", "展示岗位能力模型和知识包，强调规则可切换到其他行业。", "能力校准")}
-              ${guideStep("01:00–01:50", "AI 新找回", "进入复核队列，打开林嘉，展示 ATS 未命中与 2.5D → 3D 迁移路径。", "核心亮点")}
-              ${guideStep("01:50–02:20", "人机共决策", "展示简历事实、AI 推断、待验证缺口和建议追问。", "可信边界")}
-              ${guideStep("02:20–02:40", "效果评估", "展示召回率、精确率、增量候选人和人工复核成本。", "业务价值")}
+        <div class="guide-layout">
+          <section class="card guide-workflow">
+            <div class="card-head">
+              <div><h2>完成一次人才分析</h2><p>按以下顺序操作。每一步都可以返回修改，后续分析会使用最新信息。</p></div>
+              <span class="tag blue">首次配置约 10–15 分钟</span>
+            </div>
+            <div class="card-body guide-workflow-list">
+              ${guideWorkflowStep("01", "创建招聘项目", "输入岗位 JD、行业和招聘背景", "除了职位描述，建议补充团队正在解决的问题、候选人入职后的首要任务，以及招聘经理真正不能妥协的条件。", "产出：岗位任务与初步能力模型")}
+              ${guideWorkflowStep("02", "校准岗位理解", "确认 AI 拆解是否符合业务实际", "逐项检查核心任务、关键能力、必须项和可迁移经历。需要行业术语或企业背景时，可以关联岗位知识库继续补充。", "确认后再导入候选人")}
+              ${guideWorkflowStep("03", "导入候选人", "上传 DOCX、PDF，或粘贴简历文本", "系统先在本地提取文本并执行脱敏，再按岗位模型分析经历。批量导入后可以在复核队列查看处理状态。", "产出：结构化经历与候选人队列")}
+              ${guideWorkflowStep("04", "复核人才分析", "查看事实、推断和待验证项", "重点检查能力迁移路径是否有简历证据支撑。对证据不足的判断，使用系统生成的追问在电话沟通或面试中验证。", "由 HR 提交推荐、暂缓或不合适")}
+              ${guideWorkflowStep("05", "回填招聘结果", "记录联系、面试与 Offer 进展", "真实结果会进入效果评估，并用于判断哪些迁移规则有效、哪些候选人只是表面相似。岗位知识会随复核持续积累。", "形成岗位策略与人才分析闭环")}
             </div>
           </section>
-          <aside class="stack">
-            <section class="card">
-              <div class="card-head"><div><h3>五项评分对应</h3></div></div>
-              <div class="card-body score-map">
-                <div><span>思辨深度</span><p>信息不足不等于不匹配，事实与推断分离。</p></div>
-                <div><span>创意巧思</span><p>从关键词匹配升级为能力迁移识别。</p></div>
-                <div><span>功能完整</span><p>岗位校准、简历导入、复核、反馈、评估闭环。</p></div>
-                <div><span>交互体验</span><p>浅色企业工作台和可追溯证据。</p></div>
-                <div><span>落地可行</span><p>支持真实文件、AI API、知识包和人工决策。</p></div>
+          <aside class="guide-sidebar">
+            <section class="card guide-start-card">
+              <div class="card-head"><div><h3>开始前准备</h3><p>信息越接近真实业务，分析越有用</p></div></div>
+              <div class="card-body guide-prep-list">
+                <div><span>JD</span><p><strong>岗位描述</strong><small>职责、任职要求和工作地点</small></p></div>
+                <div><span>业务</span><p><strong>招聘经理的补充理解</strong><small>实际任务、团队阶段和关键挑战</small></p></div>
+                <div><span>简历</span><p><strong>候选人材料</strong><small>支持文件上传或直接粘贴文本</small></p></div>
               </div>
             </section>
-            <section class="card">
-              <div class="card-head"><div><h3>演示前检查</h3></div></div>
-              <div class="card-body checklist">
-                <label><input type="checkbox"> 服务状态显示“AI 演示模式”或“真实 AI”</label>
-                <label><input type="checkbox"> 标准案例中出现 3 位 AI 新找回候选人</label>
-                <label><input type="checkbox"> 林嘉详情展示事实、推断和待验证项</label>
-                <label><input type="checkbox"> 效果评估页已有人工标准答案</label>
+            <section class="card guide-policy-card">
+              <div class="card-head"><div><h3>AI 与数据边界</h3></div></div>
+              <div class="card-body guide-policy-list">
+                <div><span>本地优先</span><p>简历先在浏览器本地解析与脱敏；启用真实 AI 时，仅发送完成分析所需的文本。</p></div>
+                <div><span>证据分层</span><p>页面会区分简历事实、AI 推断和待验证信息，不把推断写成候选人事实。</p></div>
+                <div><span>人工决策</span><p>系统不自动淘汰候选人。推荐、暂缓、联系和录用决定均由招聘人员提交。</p></div>
+              </div>
+            </section>
+            <section class="card guide-entry-card">
+              <div class="card-body">
+                <p class="eyebrow">还不想使用真实简历？</p>
+                <h3>先用内置案例走一遍完整流程</h3>
+                <p>示例工作区包含岗位模型、候选人分析、人工复核记录和招聘结果，可随时重置。</p>
+                <button class="btn secondary block" data-action="start-demo">打开示例工作区</button>
               </div>
             </section>
           </aside>
         </div>
+        <section class="card guide-next">
+          <div>
+            <p class="eyebrow">下一步</p>
+            <h2>从一个正在招聘的岗位开始</h2>
+            <p>先完成岗位理解，再导入 3–10 份候选人简历进行首轮校准。不要一开始就批量处理整个简历库。</p>
+          </div>
+          <div class="guide-next-actions">
+            <button class="btn secondary" data-nav="knowledge">查看岗位知识库</button>
+            <button class="btn primary" data-action="new-project">创建招聘项目</button>
+          </div>
+        </section>
       </div>
     </section>`;
 }
 
-function guideStep(time, title, detail, tag) {
-  return `<div class="guide-step"><time>${time}</time><span></span><div><strong>${title}</strong><p>${detail}</p></div><em>${tag}</em></div>`;
-}
-
-async function resetDemo() {
-  await clearPrivateResumes();
-  localStorage.removeItem(STORAGE_KEY);
-  localStorage.setItem(ONBOARDING_KEY, "true");
-  window.location.reload();
+function guideWorkflowStep(number, title, lead, detail, outcome) {
+  return `
+    <article class="guide-workflow-step">
+      <span class="guide-step-number">${number}</span>
+      <div>
+        <header><h3>${title}</h3><strong>${lead}</strong></header>
+        <p>${detail}</p>
+        <small>${outcome}</small>
+      </div>
+    </article>`;
 }
 
 function projectMetrics(job) {
@@ -3527,7 +3553,6 @@ function handleClick(event) {
     localStorage.setItem(ONBOARDING_KEY, "true");
     onboarding?.classList.add("hidden");
   }
-  if (action === "reset-demo") resetDemo();
   if (action === "next-candidate") {
     const list = currentJob().candidates;
     const currentIndex = list.findIndex(c => c.id === state.selectedCandidate);
