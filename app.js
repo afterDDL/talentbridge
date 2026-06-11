@@ -672,10 +672,9 @@ function renderWorkbench() {
   const sourcingSamples = positiveSourcingCandidates(sourcingJob);
   const sourcingPreview = sourcingResult
     ? [
-        ...(sourcingResult.technicalKeywords || []).slice(0, 3).map(item => item.term),
-        ...(sourcingResult.productKeywords || []).slice(0, 1).map(item => item.term),
-        ...(sourcingResult.targetCompanies || []).slice(0, 1).map(item => item.company)
-      ]
+        ...(sourcingResult.technicalKeywords || []).slice(0, 2).map(item => item.term),
+        ...(sourcingResult.roleKeywords || []).slice(0, 1).map(item => item.term)
+      ].slice(0, 3)
     : [];
   main.innerHTML = `
     <section class="page">
@@ -723,12 +722,11 @@ function renderWorkbench() {
         <button class="home-sourcing-window" data-action="open-sourcing-strategy" data-job-id="${sourcingJob.id}">
           <span class="home-sourcing-icon">寻</span>
           <span class="home-sourcing-copy">
-            <span class="eyebrow">随时可查 · 寻访策略</span>
-            <strong>${sourcingResult ? `${sourcingJob.title}已有可用搜索策略` : sourcingSamples.length ? `${sourcingSamples.length} 份正向样本等待提炼` : "把招聘结果变成下一轮搜索关键词"}</strong>
-            <small>${sourcingResult ? "已根据真实招聘进展生成关键技术、产品平台、相邻岗位和目标公司。" : "完成候选人复核与招聘结果回填后，系统会反向生成可复制的招聘网站搜索组合。"}</small>
+            <span class="eyebrow">寻访策略</span>
+            <strong>${sourcingResult ? `${sourcingJob.title} · 已生成` : sourcingSamples.length ? `${sourcingSamples.length} 份正向样本可生成策略` : "生成下一轮搜索关键词"}</strong>
             ${sourcingPreview.length ? `<span class="home-sourcing-tags">${sourcingPreview.map(item => `<i>${escapeHtml(item)}</i>`).join("")}</span>` : ""}
           </span>
-          <span class="home-sourcing-action">${sourcingResult ? "查看并复制" : sourcingSamples.length ? "立即生成" : "了解使用方法"} →</span>
+          <span class="home-sourcing-action">${sourcingResult ? "打开策略" : sourcingSamples.length ? "生成策略" : "查看功能"} →</span>
         </button>
         <div class="section-title">
           <div><h2>招聘项目</h2><p>从一个岗位开始，校准标准并识别可迁移人才</p></div>
