@@ -66,6 +66,9 @@ vm.runInContext(fs.readFileSync("app.js", "utf8"), sandbox);
 
 const checks = vm.runInContext(`
   startDemo();
+  const builtInInsightReady = state.sourcingInsights.chip?.status === "ready"
+    && state.sourcingInsights.chip?.result?.sampleSize === 3
+    && state.sourcingInsights.chip?.candidateIds?.includes("linjia");
   renderWorkbench();
   const homeHtml = main.innerHTML;
   renderComparison();
@@ -93,6 +96,7 @@ const checks = vm.runInContext(`
   renderSourcingStrategy("chip");
   const strategyHtml = main.innerHTML;
   ({
+    demoSeedsSourcingInsight: builtInInsightReady,
     homeHasSourcingWindow: homeHtml.includes("随时可查 · 寻访策略") && homeHtml.includes("open-sourcing-strategy"),
     reviewHasThreeQuestions: ["招聘推进到哪一步", "AI 多找回的人，后来真的有效吗", "下一轮应该去哪里找人"].every(text => reviewHtml.includes(text)),
     reviewHasCollapsedDetails: reviewHtml.includes("review-advanced-details") && reviewHtml.includes("展开高级明细"),
@@ -100,6 +104,7 @@ const checks = vm.runInContext(`
     homePreviewsGeneratedStrategy: homeResultHtml.includes("已有可用搜索策略") && homeResultHtml.includes("混合键合"),
     strategyHasAllGroups: ["关键技术", "产品 / 平台", "相邻岗位", "目标公司"].every(text => strategyHtml.includes(text)),
     strategyHasQuery: strategyHtml.includes("核心技术组合") && strategyHtml.includes("混合键合"),
+    strategyHasCandidateCase: strategyHtml.includes("内置正向候选人案例") && strategyHtml.includes("林嘉") && strategyHtml.includes("ATS 漏选代表案例"),
     strategyHasCopy: strategyHtml.includes("copy-sourcing-query") && strategyHtml.includes("copy-all-sourcing-keywords")
   });
 `, sandbox);

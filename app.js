@@ -745,9 +745,69 @@ function startDemo() {
   state.decisions["chip:chenhao"] = { value: "推荐联系", reasons: ["技术机制相通", "关键经验待验证"], note: "TSV 与晶圆级制程相关，需核实量产责任。", stage: "已联系", stageNote: "候选人愿意了解机会。", updatedAt: new Date().toISOString() };
   state.decisions["chip:wangrui"] = { value: "暂缓", reasons: ["任务场景相似", "关键经验待验证"], note: "工艺整合能力较强，键合深度仍需确认。", stage: "未跟进", stageNote: "", updatedAt: new Date().toISOString() };
   state.decisions["chip:liuming"] = { value: "不合适", reasons: ["目标技术存在缺口", "个人职责不明确"], note: "生产管理经验不能替代先进封装工艺开发。", stage: "淘汰", stageNote: "HR 复核后不进入沟通。", updatedAt: new Date().toISOString() };
+  state.sourcingInsights.chip = builtInSourcingInsight();
   saveState();
   renderQueue();
   toast("标准演示已就绪", "先打开“林嘉”，查看 2.5D → 3D 的能力迁移路径");
+}
+
+function builtInSourcingInsight() {
+  return {
+    status: "ready",
+    generatedAt: new Date().toISOString(),
+    candidateIds: ["linjia", "zhouyi", "chenhao"],
+    result: {
+      summary: "系统从林嘉等 3 位已获正向招聘反馈的候选人中，反向提炼出下一轮主动寻访可用的技术、平台、岗位和公司关键词。",
+      sampleSize: 3,
+      signalDescription: "HR 推荐联系，且候选人已进入联系、面试或更深阶段",
+      technicalKeywords: [
+        { term: "混合键合", sourceCount: 1, reason: "3D 堆叠中的关键互连工艺，来自面试通过候选人的直接经历。" },
+        { term: "TSV", sourceCount: 1, reason: "与 3D 集成互连直接相关，可扩大对相邻封装人才的召回。" },
+        { term: "晶圆减薄", sourceCount: 1, reason: "是堆叠封装中重要的晶圆级制程能力。" },
+        { term: "微凸点互连", sourceCount: 1, reason: "2.5D 与 3D 封装之间具备迁移价值的底层工艺能力。" },
+        { term: "翘曲控制", sourceCount: 1, reason: "直接对应岗位中的工艺窗口和可靠性问题。" },
+        { term: "量产良率改善", sourceCount: 2, reason: "多位正向候选人都体现了量产问题定位和良率提升经验。" }
+      ],
+      productKeywords: [
+        { term: "3D 晶圆堆叠", sourceCount: 1, reason: "目标岗位直接负责的平台。" },
+        { term: "2.5D 中介层封装", sourceCount: 1, reason: "与 3D 封装共享互连、翘曲和良率控制能力。" },
+        { term: "Interposer", sourceCount: 1, reason: "可找到未直接写出 3D 封装但具备相邻平台经验的人才。" }
+      ],
+      roleKeywords: [
+        { term: "2.5D 封装工艺工程师", sourceCount: 1, reason: "代表容易被严格关键词过滤漏掉的相邻岗位。" },
+        { term: "3D 集成工艺专家", sourceCount: 1, reason: "与目标岗位直接对应。" },
+        { term: "先进封装研发工程师", sourceCount: 1, reason: "覆盖不同公司的岗位命名差异。" },
+        { term: "封装工艺整合工程师", sourceCount: 1, reason: "补充具备跨工序协同经验的候选人。" }
+      ],
+      targetCompanies: [
+        { company: "华芯微电子", sourceCount: 1, reason: "林嘉所在的示例先进封装企业。" },
+        { company: "联创半导体", sourceCount: 1, reason: "正向候选人所在的示例 3D 集成企业。" },
+        { company: "芯桥科技", sourceCount: 1, reason: "正向候选人所在的示例 TSV 工艺企业。" }
+      ],
+      exclusionKeywords: [],
+      searchQueries: [
+        {
+          label: "直接技术路线",
+          query: '("混合键合" OR "TSV" OR "晶圆减薄") AND ("量产导入" OR "良率爬坡")',
+          usage: "优先寻找具备 3D 堆叠关键制程和量产经验的人才。"
+        },
+        {
+          label: "相邻能力路线",
+          query: '("2.5D" OR "Interposer" OR "CoWoS") AND ("翘曲控制" OR "微凸点互连" OR "失效分析")',
+          usage: "扩大召回，寻找岗位名称不同但底层任务相通的人才。"
+        },
+        {
+          label: "企业与岗位组合",
+          query: '("华芯微电子" OR "联创半导体" OR "芯桥科技") AND ("先进封装" OR "3D集成" OR "TSV")',
+          usage: "用于招聘网站或人才库中的定向猎聘。"
+        }
+      ],
+      cautions: [
+        "关键词用于扩大人才召回，不能替代 HR 对候选人实际项目深度和个人职责的复核。",
+        "候选人与企业均为虚构演示数据；真实使用时系统会根据当前岗位的招聘反馈重新提炼。"
+      ]
+    }
+  };
 }
 
 function renderGuide() {
@@ -1522,6 +1582,37 @@ function sourcingKeywordItems(items = [], type = "term") {
   }).join("");
 }
 
+function sourcingSampleCases(job, insight) {
+  const candidateIds = insight?.candidateIds?.length
+    ? insight.candidateIds
+    : positiveSourcingCandidates(job).map(candidate => candidate.id);
+  const candidates = candidateIds
+    .map(candidateId => job.candidates.find(candidate => candidate.id === candidateId))
+    .filter(Boolean);
+  if (!candidates.length) return "";
+  return `
+    <div class="sourcing-sample-cases">
+      <div class="sourcing-sample-title">
+        <div><strong>内置正向候选人案例</strong><span>点击候选人可查看为什么这段经历能反向生成关键词</span></div>
+        <small>演示数据</small>
+      </div>
+      <div class="sourcing-sample-list">
+        ${candidates.map(candidate => {
+          const record = candidateRecord(candidate.id, job.id);
+          return `
+            <button data-action="open-insight-candidate" data-job-id="${job.id}" data-candidate-id="${candidate.id}">
+              <span class="person-avatar">${escapeHtml(candidate.name.slice(-1))}</span>
+              <span>
+                <strong>${escapeHtml(candidate.name)} · ${escapeHtml(candidate.role)}</strong>
+                <small>${escapeHtml(candidate.core)}｜${escapeHtml(record.stage)}</small>
+              </span>
+              ${candidate.recovered ? `<em>ATS 漏选代表案例</em>` : `<em>正向样本</em>`}
+            </button>`;
+        }).join("")}
+      </div>
+    </div>`;
+}
+
 function sourcingInsightCard(job) {
   const samples = positiveSourcingCandidates(job);
   const insight = state.sourcingInsights[job.id];
@@ -1583,6 +1674,7 @@ function sourcingInsightCard(job) {
         <strong>样本口径</strong>
         <span>${escapeHtml(result.signalDescription || "HR 推荐联系，且已有联系或更深阶段进展")}${updated ? ` · 更新于 ${updated}` : ""}</span>
       </div>
+      ${sourcingSampleCases(job, insight)}
       <div class="sourcing-keyword-grid">
         <section><h3>关键技术</h3><p>搜索候选人真正做过的技术与方法</p><div>${sourcingKeywordItems(result.technicalKeywords)}</div></section>
         <section><h3>产品 / 平台</h3><p>岗位名不同时，用产品环境扩大召回</p><div>${sourcingKeywordItems(result.productKeywords)}</div></section>
