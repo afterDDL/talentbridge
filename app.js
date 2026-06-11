@@ -1882,7 +1882,9 @@ function renderComparison() {
   const job = currentJob();
   const metrics = getEvaluationMetrics(job);
   const business = getBusinessMetrics(job);
-  state.view = "job";
+  const selectedCandidate = job.candidates.find(candidate => candidate.id === state.selectedCandidate) || job.candidates[0];
+  state.selectedCandidate = selectedCandidate?.id || "";
+  state.view = "comparison";
   setActiveSidebar();
   renderRecentJobs();
   main.innerHTML = `
@@ -1915,46 +1917,59 @@ function renderComparison() {
             </div>
           </div>
         </details>
-        <div class="review-section-title"><span>03</span><div><h2>下一轮应该去哪里找人？</h2><p>把已验证的候选人特征反向变成搜索词，而不是重新从 JD 猜关键词。</p></div></div>
-        ${sourcingReviewCta(job)}
-        <details class="review-advanced-details">
-          <summary><span><strong>查看候选人明细与模型评估</strong><small>候选人流向、逐人招聘进展、人工质量标签和数据导出</small></span><b>展开高级明细</b></summary>
-          <div class="review-advanced-body">
-            <div class="review-export-actions">
-              <button class="btn secondary small" data-action="export-evaluation-csv">导出明细 CSV</button>
-              <button class="btn secondary small" data-action="export-evaluation-json">导出评估 JSON</button>
+        <div class="review-section-title"><span>02</span><div><h2>提交判断并更新招聘进展</h2><p>选择候选人，记录 HR 结论和后续招聘阶段。</p></div></div>
+        ${selectedCandidate ? comparisonDecisionPanel(job, selectedCandidate) : `<div class="card empty-state"><strong>暂无候选人</strong><p>请先导入候选人并完成分析。</p></div>`}
+      </div>
+    </section>`;
+}
+
+function comparisonDecisionPanel(job, candidate) {
+  const record = candidateRecord(candidate.id);
+  const verdictClass = candidate.group === "priority" ? "green" : candidate.group === "review" ? "blue" : candidate.group === "unknown" ? "amber" : "gray";
+  return `
+    <section class="comparison-decision-panel">
+      <div class="comparison-candidate-tabs" role="tablist" aria-label="选择候选人">
+        ${job.candidates.map(item => {
+          const itemRecord = candidateRecord(item.id);
+          return `
+            <button class="${item.id === candidate.id ? "active" : ""}" data-action="select-outcome-candidate" data-candidate-id="${item.id}">
+              <span class="person-avatar">${item.name.slice(-1)}</span>
+              <span><strong>${item.name}</strong><small>${itemRecord.value || "待提交判断"} · ${itemRecord.stage}</small></span>
+            </button>`;
+        }).join("")}
+      </div>
+      <div class="comparison-candidate-summary card">
+        <div>
+          <p class="eyebrow">当前候选人</p>
+          <h3>${candidate.name} · ${candidate.role}</h3>
+          <p>${candidate.company} · ${candidate.core}</p>
+        </div>
+        <span class="tag ${verdictClass}">${candidate.verdict}</span>
+      </div>
+      <div class="comparison-decision-grid">
+        <div class="card">
+          <div class="card-head"><div><h3>1. 提交 HR 决策</h3><p>判断是否值得进入招聘流程</p></div></div>
+          <div class="card-body">
+            <div class="review-choice-grid">
+              ${REVIEW_DECISIONS.map(value => `<label class="${record.value === value ? "selected" : ""}"><input type="radio" name="reviewDecision" value="${value}" ${record.value === value ? "checked" : ""}><span>${value}</span></label>`).join("")}
             </div>
-            <div class="card result-map-card">
-              <div class="card-head"><div><h2>候选人流向</h2><p>查看 ATS 与 AI 在哪些人选上产生差异</p></div></div>
-              <div class="card-body">
-                <div class="result-columns">
-                  ${resultColumn("ATS 与 AI 共同命中", metrics.shared, "blue", "直接相关证据较充分")}
-                  ${resultColumn("AI 增量找回", metrics.recovered, "cyan", "关键词未命中，但存在迁移路径")}
-                  ${resultColumn("仍需人工判断", metrics.missed, "amber", "信息不足或关键差距明确")}
-                </div>
-              </div>
+            <div class="field-label">判断理由（可多选）</div>
+            <div class="review-reason-grid">
+              ${REVIEW_REASONS.map(reason => `<label><input type="checkbox" name="reviewReason" value="${reason}" ${record.reasons.includes(reason) ? "checked" : ""}><span>${reason}</span></label>`).join("")}
             </div>
-            <div class="card">
-              <div class="card-head"><div><h2>复核与招聘进展明细</h2><p>AI 建议、HR 决策理由和后续结果</p></div><span class="tag blue">${business.reviewed.length}/${job.candidates.length} 已复核</span></div>
-              <div class="card-body" style="padding:0">
-                <table class="candidate-table feedback-table">
-                  <thead><tr><th>候选人</th><th>AI 建议</th><th>HR 决策</th><th>核心理由</th><th>招聘进展</th><th>更新时间</th></tr></thead>
-                  <tbody>${job.candidates.map(feedbackRow).join("")}</tbody>
-                </table>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-head"><div><h2>模型质量人工标签</h2><p>用于计算召回率和精确率的人工标准答案</p></div><span class="tag gray">${metrics.evaluated.length}/${job.candidates.length} 已标注</span></div>
-              <div class="card-body" style="padding:0">
-                <table class="candidate-table evaluation-table">
-                  <thead><tr><th>候选人</th><th>ATS</th><th>AI 建议</th><th>人工标准答案</th><th>结果说明</th></tr></thead>
-                  <tbody>${job.candidates.map(evaluationRow).join("")}</tbody>
-                </table>
-              </div>
-            </div>
+            <textarea class="decision-note" id="decisionNote" placeholder="补充业务判断、风险或建议">${escapeHtml(record.note)}</textarea>
+            <button class="btn primary full-width" data-action="save-review-decision">保存 HR 决策</button>
           </div>
-        </details>
-        <p class="evaluation-footnote">当前 Demo 指标用于验证产品逻辑；正式评估仍需扩大样本，并由业务专家盲标。</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h3>2. 更新招聘进展</h3><p>联系、面试、Offer 或入职</p></div></div>
+          <div class="card-body outcome-form">
+            <label><span>当前招聘阶段</span><select id="hiringStage">${HIRING_STAGES.map(stage => `<option value="${stage}" ${record.stage === stage ? "selected" : ""}>${stage}</option>`).join("")}</select></label>
+            <label><span>跟进备注</span><textarea id="hiringStageNote" placeholder="例如：候选人愿意沟通，周五安排技术面">${escapeHtml(record.stageNote)}</textarea></label>
+            <button class="btn secondary full-width" data-action="save-hiring-outcome">更新招聘进展</button>
+            ${record.updatedAt ? `<small class="record-updated">最近更新：${new Date(record.updatedAt).toLocaleString("zh-CN")}</small>` : ""}
+          </div>
+        </div>
       </div>
     </section>`;
 }
@@ -2332,29 +2347,6 @@ function renderCandidateDetail(candidateId) {
             <div class="card">
               <div class="card-head"><div><h3>首轮验证问题</h3><p>面试或电话沟通可直接使用</p></div></div>
               <div class="card-body"><ol class="question-list">${c.questions.slice(0, 3).map(x => `<li>${x}</li>`).join("")}</ol></div>
-            </div>
-            <div class="card">
-              <div class="card-head"><div><h3>1. 提交 HR 决策</h3><p>判断是否值得进入招聘流程</p></div></div>
-              <div class="card-body">
-                <div class="review-choice-grid">
-                  ${REVIEW_DECISIONS.map(value => `<label class="${record.value === value ? "selected" : ""}"><input type="radio" name="reviewDecision" value="${value}" ${record.value === value ? "checked" : ""}><span>${value}</span></label>`).join("")}
-                </div>
-                <div class="field-label">判断理由（可多选）</div>
-                <div class="review-reason-grid">
-                  ${REVIEW_REASONS.map(reason => `<label><input type="checkbox" name="reviewReason" value="${reason}" ${record.reasons.includes(reason) ? "checked" : ""}><span>${reason}</span></label>`).join("")}
-                </div>
-                <textarea class="decision-note" id="decisionNote" placeholder="补充业务判断、风险或建议">${escapeHtml(record.note)}</textarea>
-                <button class="btn primary full-width" data-action="save-review-decision">保存 HR 决策</button>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-head"><div><h3>2. 更新招聘进展</h3><p>联系、面试、Offer 或入职</p></div></div>
-              <div class="card-body outcome-form">
-                <label><span>当前招聘阶段</span><select id="hiringStage">${HIRING_STAGES.map(stage => `<option value="${stage}" ${record.stage === stage ? "selected" : ""}>${stage}</option>`).join("")}</select></label>
-                <label><span>跟进备注</span><textarea id="hiringStageNote" placeholder="例如：候选人愿意沟通，周五安排技术面">${escapeHtml(record.stageNote)}</textarea></label>
-                <button class="btn secondary full-width" data-action="save-hiring-outcome">更新招聘进展</button>
-                ${record.updatedAt ? `<small class="record-updated">最近更新：${new Date(record.updatedAt).toLocaleString("zh-CN")}</small>` : ""}
-              </div>
             </div>
           </aside>
         </div>
@@ -3322,7 +3314,13 @@ function handleClick(event) {
   if (action === "toggle-account-menu") toggleAccountMenu();
   if (action === "close-account-menu") toggleAccountMenu(false);
   if (action === "save-account-profile") saveAccountProfile();
+  if (action === "select-outcome-candidate") {
+    state.selectedCandidate = actionEl.dataset.candidateId;
+    renderComparison();
+    return;
+  }
   if (action === "save-review-decision") {
+    const returnToComparison = Boolean(actionEl.closest(".comparison-decision-panel"));
     const value = document.querySelector('input[name="reviewDecision"]:checked')?.value || "";
     const reasons = [...document.querySelectorAll('input[name="reviewReason"]:checked')].map(input => input.value);
     const note = document.getElementById("decisionNote")?.value.trim() || "";
@@ -3340,7 +3338,8 @@ function handleClick(event) {
     state.evaluations[`${state.currentJob}:${state.selectedCandidate}`] = decisionEvaluation(value);
     delete state.sourcingInsights[state.currentJob];
     saveState();
-    renderCandidateDetail(state.selectedCandidate);
+    if (returnToComparison) renderComparison();
+    else renderCandidateDetail(state.selectedCandidate);
     toast("复核决策已保存", `${value} · 已纳入效果复盘`);
     if (value === "推荐联系" && SOURCING_POSITIVE_STAGES.includes(stage)) {
       void generateSourcingKeywords({ silent: true });
@@ -3348,11 +3347,13 @@ function handleClick(event) {
     return;
   }
   if (action === "save-hiring-outcome") {
+    const returnToComparison = Boolean(actionEl.closest(".comparison-decision-panel"));
     const stage = document.getElementById("hiringStage")?.value || "未跟进";
     const stageNote = document.getElementById("hiringStageNote")?.value.trim() || "";
     delete state.sourcingInsights[state.currentJob];
     saveCandidateRecord(state.selectedCandidate, { stage, stageNote });
-    renderCandidateDetail(state.selectedCandidate);
+    if (returnToComparison) renderComparison();
+    else renderCandidateDetail(state.selectedCandidate);
     toast("招聘进展已更新", `${stage} · 转化漏斗已重新计算`);
     const updatedRecord = candidateRecord(state.selectedCandidate);
     if (updatedRecord.value === "推荐联系" && SOURCING_POSITIVE_STAGES.includes(updatedRecord.stage)) {

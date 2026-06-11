@@ -477,7 +477,6 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .evaluation-options button.selected.relevant { border-color: #9bd093; background: var(--green-soft); color: #237b1b; }
 .evaluation-options button.selected.irrelevant { border-color: #e4aaa6; background: var(--red-soft); color: #b52b25; }
 .evaluation-options button.selected.unknown { border-color: #e6c08c; background: var(--amber-soft); color: #9a5109; }
-.evaluation-footnote { margin: 14px 0 0; color: var(--text-3); font-size: 11px; text-align: center; }
 .review-purpose { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; padding: 13px 16px; border: 1px solid #d9e2f7; border-radius: 8px; background: #f7f9fd; }
 .review-purpose strong { flex: 0 0 auto; font-size: 12px; }
 .review-purpose span { color: var(--text-2); font-size: 11px; line-height: 1.5; }
@@ -498,15 +497,6 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .review-sourcing-cta strong { margin-top: 3px; font-size: 13px; }
 .review-sourcing-cta em { margin-top: 5px; color: var(--text-3); font-size: 9px; font-style: normal; }
 .review-sourcing-cta > b { color: #087f7a; font-size: 11px; white-space: nowrap; }
-.review-advanced-details { margin-top: 16px; border: 1px solid var(--line); border-radius: 8px; background: white; }
-.review-advanced-details > summary { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 16px; cursor: pointer; list-style: none; }
-.review-advanced-details > summary::-webkit-details-marker { display: none; }
-.review-advanced-details > summary strong, .review-advanced-details > summary small { display: block; }
-.review-advanced-details > summary strong { font-size: 12px; }
-.review-advanced-details > summary small { margin-top: 4px; color: var(--text-3); font-size: 9px; }
-.review-advanced-details > summary b { color: var(--blue); font-size: 10px; }
-.review-advanced-details[open] > summary { border-bottom: 1px solid var(--line-soft); }
-.review-advanced-details[open] > summary b::before { content: "收起 · "; }
 .review-metric-details { margin: 12px 0 18px; border: 1px solid var(--line-soft); border-radius: 8px; background: white; }
 .review-metric-details > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 15px; cursor: pointer; list-style: none; }
 .review-metric-details > summary::-webkit-details-marker { display: none; }
@@ -522,8 +512,6 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .ai-outcome-summary > span strong { font-size: 13px; }
 .ai-outcome-summary > span strong b { color: var(--text); font-size: 18px; }
 .ai-outcome-summary > em { color: var(--blue); font-size: 10px; font-style: normal; font-weight: 600; }
-.review-advanced-body { display: grid; gap: 14px; padding: 16px; background: #fafbfc; }
-.review-export-actions { display: flex; justify-content: flex-end; gap: 7px; }
 .recruiting-funnel { display: grid; grid-template-columns: repeat(4, 1fr); margin-bottom: 18px; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 8px; background: white; }
 .funnel-stage { position: relative; min-width: 0; padding: 15px 18px; }
 .funnel-stage + .funnel-stage { border-left: 1px solid var(--line-soft); }
@@ -536,6 +524,19 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .funnel-stage.cyan { box-shadow: inset 0 3px var(--cyan); }
 .funnel-stage.purple { box-shadow: inset 0 3px var(--purple); }
 .funnel-stage.green { box-shadow: inset 0 3px var(--green); }
+.comparison-decision-panel { display: grid; gap: 12px; }
+.comparison-candidate-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 3px; }
+.comparison-candidate-tabs button { display: flex; align-items: center; gap: 8px; min-width: 170px; padding: 9px 11px; border: 1px solid var(--line-soft); border-radius: 7px; background: white; color: var(--text); cursor: pointer; text-align: left; }
+.comparison-candidate-tabs button:hover { border-color: #aabfff; }
+.comparison-candidate-tabs button.active { border-color: var(--blue); background: var(--blue-soft); box-shadow: inset 0 0 0 1px rgba(51,112,255,.08); }
+.comparison-candidate-tabs button > span:last-child { min-width: 0; }
+.comparison-candidate-tabs strong, .comparison-candidate-tabs small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comparison-candidate-tabs strong { font-size: 11px; }
+.comparison-candidate-tabs small { margin-top: 3px; color: var(--text-3); font-size: 9px; }
+.comparison-candidate-summary { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 15px 18px; }
+.comparison-candidate-summary h3 { margin: 4px 0; font-size: 15px; }
+.comparison-candidate-summary p:not(.eyebrow) { margin: 0; color: var(--text-2); font-size: 10px; }
+.comparison-decision-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr); gap: 12px; align-items: start; }
 .outcome-insight-card { display: flex; align-items: center; justify-content: space-between; gap: 22px; margin-bottom: 14px; padding: 17px 19px; border-color: #cddcff; background: linear-gradient(135deg, #f7f9ff, #fff); }
 .outcome-insight-card > div:first-child { min-width: 0; }
 .outcome-insight-card > div:first-child strong, .outcome-insight-card > div:first-child span { display: block; }
@@ -941,6 +942,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   .guide-hero-product { grid-template-columns: 1fr; }
   .guide-layout { grid-template-columns: minmax(0, 1fr) 300px; }
   .guide-flow { justify-content: flex-start; overflow-x: auto; }
+  .comparison-decision-grid { grid-template-columns: minmax(0, 1fr) 300px; }
   .page-body, .dashboard-body { padding-left: 22px; padding-right: 22px; }
 }
 
@@ -969,4 +971,5 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   .guide-workflow-step header, .guide-next { align-items: flex-start; flex-direction: column; }
   .guide-workflow-step header strong { text-align: left; }
   .guide-next-actions { width: 100%; }
+  .comparison-decision-grid { grid-template-columns: 1fr; }
 }
