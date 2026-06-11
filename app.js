@@ -1836,16 +1836,11 @@ function renderComparison() {
           ${funnelStage("进入面试", business.interviewed.length, `${business.interviewRate}% 联系后进入面试`, "purple")}
           ${funnelStage("Offer / 入职", business.offers.length, `${business.offerRate}% 面试后获得 Offer`, "green")}
         </div>
-        <div class="review-section-title"><span>02</span><div><h2>AI 多找回的人，后来真的有效吗？</h2><p>只用 HR 决策和后续招聘结果验证，不让 AI 自己证明自己。</p></div></div>
-        <div class="card outcome-insight-card">
-          <div>
-            <p class="eyebrow">AI 增量价值</p>
-            <strong>${business.recoveredRecommended.length} 位 ATS 漏选人才被 HR 推荐，其中 ${business.recoveredInterviewed.length} 位进入面试</strong>
-            <span>结论来自 HR 决策和招聘进展回填。</span>
-          </div>
-        </div>
         <details class="review-metric-details">
-          <summary><span><strong>查看模型指标</strong><small>召回率、精确率与人工判断依据</small></span><b>展开评估明细</b></summary>
+          <summary class="ai-outcome-summary">
+            <span><small>AI 找回效果</small><strong><b>${business.recoveredRecommended.length}</b> 人获 HR 推荐 · <b>${business.recoveredInterviewed.length}</b> 人进入面试</strong></span>
+            <em>查看模型指标 →</em>
+          </summary>
           <div>
             ${metrics.unknown.length ? `<div class="evaluation-warning"><strong>${metrics.unknown.length} 位候选人尚未标注</strong><span>未标注数据不进入指标计算。</span></div>` : ""}
             <div class="metric-compare-grid">

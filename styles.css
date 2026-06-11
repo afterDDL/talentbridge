@@ -504,6 +504,12 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .review-metric-details > summary b { color: var(--blue); font-size: 9px; }
 .review-metric-details[open] > summary { border-bottom: 1px solid var(--line-soft); }
 .review-metric-details > div { padding: 14px; background: #fafbfc; }
+.review-metric-details > summary.ai-outcome-summary { padding: 14px 16px; }
+.ai-outcome-summary > span small, .ai-outcome-summary > span strong { display: block; }
+.ai-outcome-summary > span small { margin: 0 0 4px; color: var(--blue); font-size: 10px; font-weight: 600; }
+.ai-outcome-summary > span strong { font-size: 13px; }
+.ai-outcome-summary > span strong b { color: var(--text); font-size: 18px; }
+.ai-outcome-summary > em { color: var(--blue); font-size: 10px; font-style: normal; font-weight: 600; }
 .review-advanced-body { display: grid; gap: 14px; padding: 16px; background: #fafbfc; }
 .review-export-actions { display: flex; justify-content: flex-end; gap: 7px; }
 .recruiting-funnel { display: grid; grid-template-columns: repeat(4, 1fr); margin-bottom: 18px; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 8px; background: white; }
