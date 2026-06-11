@@ -73,6 +73,8 @@ const checks = vm.runInContext(`
   const homeHtml = main.innerHTML;
   renderRequirement();
   const requirementHtml = main.innerHTML;
+  renderQueue();
+  const queueHtml = main.innerHTML;
   renderComparison();
   const reviewHtml = main.innerHTML;
   jobs.chip.candidates.find(candidate => candidate.id === "linjia").companyResearch = { status: "loading", skill: "industry-research-v6" };
@@ -105,9 +107,11 @@ const checks = vm.runInContext(`
     workflowHasSixSteps: ["定义岗位", "校准标准", "导入简历", "复核候选人", "回填结果", "优化寻访"].every(text => requirementHtml.includes(text)),
     workflowConnectsOutcomeAndSourcing: requirementHtml.includes('data-step="5"') && requirementHtml.includes('data-step="6"'),
     requirementHasClearPurpose: requirementHtml.includes("岗位定义") && requirementHtml.includes("下一步：校准能力标准"),
+    queueUsesCompactStatus: queueHtml.includes("queue-status-line") && !queueHtml.includes('<div class="queue-stats">') && !queueHtml.includes("compare-banner"),
     homeHasSourcingWindow: homeHtml.includes("随时可查 · 寻访策略") && homeHtml.includes("open-sourcing-strategy"),
     reviewHasThreeQuestions: ["招聘推进到哪一步", "AI 多找回的人，后来真的有效吗", "下一轮应该去哪里找人"].every(text => reviewHtml.includes(text)),
     reviewHasClearFunctionLabel: reviewHtml.includes("当前功能 · 招聘结果") && reviewHtml.includes("确认 AI 找回的人是否真的进入后续招聘流程"),
+    reviewUsesSingleFunnel: reviewHtml.includes("recruiting-funnel") && !reviewHtml.includes("business-outcome-card") && !reviewHtml.includes("outcome-mini-metrics"),
     reviewCollapsesModelMetrics: reviewHtml.includes("review-metric-details") && reviewHtml.includes("展开评估明细"),
     reviewHasCollapsedDetails: reviewHtml.includes("review-advanced-details") && reviewHtml.includes("展开高级明细"),
     candidateHasClearActions: candidateHtml.includes("正在复核") && candidateHtml.includes("1. 提交 HR 决策") && candidateHtml.includes("2. 更新招聘进展"),

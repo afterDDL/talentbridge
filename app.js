@@ -1413,16 +1413,12 @@ function renderQueue() {
       ${stepHeader(4)}
       <div class="page-body">
         <div class="page-purpose-bar"><span>候选人复核</span><strong>判断是否联系，并记录判断理由</strong><small>${businessMetrics.pendingReview.length} 人待复核 · ${businessMetrics.interviewed.length} 人已进入面试</small></div>
-        <div class="compare-banner">
-          <div><strong>发现 ${recovered} 位 ATS 未命中的候选人</strong><p>先复核迁移证据，再决定是否联系。</p></div>
-          <button class="btn secondary" data-action="show-compare">查看招聘结果看板</button>
-        </div>
-        <div class="queue-stats">
-          ${statCard("全部候选人", job.candidates.length, "已完成结构化分析")}
-          ${statCard("优先联系", job.candidates.filter(c => c.group === "priority").length, "直接证据充分")}
-          ${statCard("AI 新找回", recovered, "ATS 未命中", "cyan")}
-          ${statCard("待人工判断", businessMetrics.pendingReview.length, "尚未提交 HR 复核结论")}
-          ${statCard("进入面试", businessMetrics.interviewed.length, "来自招聘结果回填")}
+        <div class="queue-status-line">
+          <span><strong>${job.candidates.length}</strong> 位候选人</span>
+          <span class="${businessMetrics.pendingReview.length ? "attention" : ""}"><strong>${businessMetrics.pendingReview.length}</strong> 位待复核</span>
+          ${recovered ? `<span class="recovered"><strong>${recovered}</strong> 位 ATS 漏选找回</span>` : ""}
+          <span><strong>${businessMetrics.interviewed.length}</strong> 位进入面试</span>
+          <button data-action="show-compare">查看招聘结果 →</button>
         </div>
         <div class="card">
           <div class="card-head" style="align-items:center">
@@ -1831,23 +1827,18 @@ function renderComparison() {
       <div class="page-body">
         <div class="page-purpose-bar"><span>招聘结果</span><strong>确认 AI 找回的人是否真的进入后续招聘流程</strong><small><button class="text-action" data-action="copy-evaluation">复制结果摘要</button></small></div>
         <div class="review-section-title"><span>01</span><div><h2>招聘推进到哪一步？</h2><p>先看实际转化，不看模型术语。</p></div></div>
-        <div class="business-funnel-grid">
-          ${businessOutcomeCard("完成复核", business.reviewed.length, `${business.reviewRate}% 候选人已有 HR 结论`, "blue")}
-          ${businessOutcomeCard("推荐联系", business.recommended.length, `${business.contactRate}% 已实际联系`, "cyan")}
-          ${businessOutcomeCard("进入面试", business.interviewed.length, `${business.interviewRate}% 联系后进入面试`, "purple")}
-          ${businessOutcomeCard("Offer / 入职", business.offers.length, `${business.offerRate}% 面试后获得 Offer`, "green")}
+        <div class="recruiting-funnel">
+          ${funnelStage("完成复核", business.reviewed.length, `${business.reviewRate}% 已有 HR 结论`, "blue")}
+          ${funnelStage("实际联系", business.contacted.length, `${business.contactRate}% 推荐后已联系`, "cyan")}
+          ${funnelStage("进入面试", business.interviewed.length, `${business.interviewRate}% 联系后进入面试`, "purple")}
+          ${funnelStage("Offer / 入职", business.offers.length, `${business.offerRate}% 面试后获得 Offer`, "green")}
         </div>
         <div class="review-section-title"><span>02</span><div><h2>AI 多找回的人，后来真的有效吗？</h2><p>只用 HR 决策和后续招聘结果验证，不让 AI 自己证明自己。</p></div></div>
         <div class="card outcome-insight-card">
           <div>
             <p class="eyebrow">AI 增量价值</p>
             <strong>${business.recoveredRecommended.length} 位 ATS 漏选人才被 HR 推荐，其中 ${business.recoveredInterviewed.length} 位进入面试</strong>
-            <span>这两个数字来自真实复核决策和招聘进展回填，不使用预计节省时间。</span>
-          </div>
-          <div class="outcome-mini-metrics">
-            <p><strong>${business.pendingReview.length}</strong><span>待复核</span></p>
-            <p><strong>${business.overturned.length}</strong><span>HR 推翻 AI</span></p>
-            <p><strong>${business.hired.length}</strong><span>已入职</span></p>
+            <span>结论来自 HR 决策和招聘进展回填。</span>
           </div>
         </div>
         <details class="review-metric-details">
@@ -1909,8 +1900,13 @@ function renderComparison() {
     </section>`;
 }
 
-function businessOutcomeCard(label, value, detail, color) {
-  return `<div class="card business-outcome-card ${color}"><span>${label}</span><strong>${value}</strong><p>${detail}</p></div>`;
+function funnelStage(label, value, detail, color) {
+  return `
+    <div class="funnel-stage ${color}">
+      <span>${label}</span>
+      <strong>${value}</strong>
+      <small>${detail}</small>
+    </div>`;
 }
 
 function feedbackRow(candidate) {
