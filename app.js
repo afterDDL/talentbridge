@@ -680,7 +680,6 @@ function renderWorkbench() {
           <div class="hero-actions">
             <button class="btn primary" data-action="open-current">进入当前招聘项目</button>
             <button class="btn secondary" data-action="new-project">＋ 新建岗位</button>
-            <button class="btn ghost" data-action="start-demo">打开示例工作区</button>
           </div>
         </div>
         <aside class="hero-insight">
