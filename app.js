@@ -743,8 +743,8 @@ function startDemo() {
   state.decisions["chip:liuming"] = { value: "不合适", reasons: ["目标技术存在缺口", "个人职责不明确"], note: "生产管理经验不能替代先进封装工艺开发。", stage: "淘汰", stageNote: "HR 复核后不进入沟通。", updatedAt: new Date().toISOString() };
   state.sourcingInsights.chip = builtInSourcingInsight();
   saveState();
-  renderQueue();
-  toast("示例工作区已打开", "可以先查看“林嘉”的 2.5D → 3D 能力迁移分析");
+  renderRequirement();
+  toast("示例工作区已打开", "从步骤 1 的岗位要求开始体验完整招聘闭环");
 }
 
 function builtInSourcingInsight() {
@@ -815,7 +815,7 @@ function renderGuide() {
       <div class="page-head" style="padding-bottom:20px">
         <div class="breadcrumbs"><b>帮助中心</b><span>/</span><span>使用指南</span></div>
         <div class="title-row">
-          <div class="title-copy"><div><h1>TalentBridge 使用指南</h1><p>从创建岗位、分析候选人到回填招聘结果，完成一次可追溯的人才筛选</p></div></div>
+          <div class="title-copy"><div><h1>TalentBridge 使用指南</h1><p>从创建岗位、分析候选人到回填结果与优化寻访策略，完成一次可追溯的招聘闭环</p></div></div>
           <div class="title-actions"><button class="btn secondary" data-action="start-demo">打开示例工作区</button><button class="btn primary" data-action="new-project">创建招聘项目</button></div>
         </div>
       </div>
@@ -842,6 +842,7 @@ function renderGuide() {
               ${guideWorkflowStep("03", "导入候选人", "上传 DOCX、PDF，或粘贴简历文本", "系统先在本地提取文本并执行脱敏，再按岗位模型分析经历。批量导入后可以在复核队列查看处理状态。", "产出：结构化经历与候选人队列")}
               ${guideWorkflowStep("04", "复核人才分析", "查看事实、推断和待验证项", "重点检查能力迁移路径是否有简历证据支撑。对证据不足的判断，使用系统生成的追问在电话沟通或面试中验证。", "由 HR 提交推荐、暂缓或不合适")}
               ${guideWorkflowStep("05", "回填招聘结果", "记录联系、面试与 Offer 进展", "真实结果会进入效果评估，并用于判断哪些迁移规则有效、哪些候选人只是表面相似。岗位知识会随复核持续积累。", "形成岗位策略与人才分析闭环")}
+              ${guideWorkflowStep("06", "优化寻访策略", "把有效招聘结果转化为下一轮搜索方案", "系统根据 HR 复核和招聘进展，反向提炼有效技术关键词、相邻岗位、目标公司及布尔搜索式，帮助 HR 扩大合理召回并减少无效搜索。", "产出：可复制的 AI 寻访策略")}
             </div>
           </section>
           <aside class="guide-sidebar">
