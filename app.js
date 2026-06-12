@@ -1616,8 +1616,7 @@ function sourcingSampleCases(job, insight) {
   return `
     <div class="sourcing-sample-cases">
       <div class="sourcing-sample-title">
-        <div><strong>内置正向候选人案例</strong><span>点击候选人可查看为什么这段经历能反向生成关键词</span></div>
-        <small>演示数据</small>
+        <div><strong>关键词来源候选人案例</strong><span>点击候选人查看其经历与关键词的对应关系</span></div>
       </div>
       <div class="sourcing-sample-list">
         ${candidates.map(candidate => {

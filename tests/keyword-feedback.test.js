@@ -141,7 +141,7 @@ const checks = vm.runInContext(`
     sourcingHubRequiresSecondClick: sourcingHubHtml.includes('data-action="open-sourcing-strategy"') && !sourcingHubHtml.includes("sourcing-keyword-grid"),
     strategyHasAllGroups: ["关键技术", "产品 / 平台", "相邻岗位", "目标公司"].every(text => strategyHtml.includes(text)),
     strategyHasQuery: strategyHtml.includes("核心技术组合") && strategyHtml.includes("混合键合"),
-    strategyHasCandidateCase: strategyHtml.includes("内置正向候选人案例") && strategyHtml.includes("林嘉") && strategyHtml.includes("ATS 漏选代表案例"),
+    strategyHasCandidateCase: strategyHtml.includes("关键词来源候选人案例") && strategyHtml.includes("林嘉") && strategyHtml.includes("ATS 漏选代表案例") && !strategyHtml.includes("演示数据"),
     strategyHasClearFunctionLabel: strategyHtml.includes("当前功能 · 寻访策略") && strategyHtml.includes("把有效候选人的共同特征变成下一轮搜索词"),
     strategyHasCopy: strategyHtml.includes("copy-sourcing-query") && strategyHtml.includes("copy-all-sourcing-keywords"),
     deleteCanKeepGeneratedKeywords,
