@@ -2631,12 +2631,26 @@ function deleteCandidate(candidateId, returnToImport = false) {
   const job = currentJob();
   const candidate = job.candidates.find(item => item.id === candidateId);
   if (!candidate) return;
+  const sourcingInsight = state.sourcingInsights[job.id];
+  const contributedToSourcing = Boolean(
+    sourcingInsight?.result
+    && sourcingInsight.candidateIds?.includes(candidate.id)
+  );
+  const refreshSourcingKeywords = contributedToSourcing
+    ? window.confirm(
+        `${candidate.name}参与生成了当前 AI 寻访策略。\n\n`
+        + "是否同时移除其对关键词的影响，并根据剩余正向案例重新生成策略？\n\n"
+        + "确定：重新生成策略\n取消：保留当前已生成关键词"
+      )
+    : false;
 
   job.candidates = job.candidates.filter(item => item.id !== candidate.id);
   const recordKey = `${job.id}:${candidate.id}`;
   delete state.decisions[recordKey];
   delete state.evaluations[recordKey];
-  delete state.sourcingInsights[job.id];
+  if (refreshSourcingKeywords) {
+    delete state.sourcingInsights[job.id];
+  }
   if (!candidate.custom) {
     const deleted = new Set(state.deletedCandidates[job.id] || []);
     deleted.add(candidate.id);
@@ -2648,7 +2662,15 @@ function deleteCandidate(candidateId, returnToImport = false) {
   saveState();
   if (returnToImport || !job.candidates.length) renderImportStep();
   else renderQueue();
-  toast("候选人已删除", `${candidate.name}已从当前岗位复核队列移除`);
+  toast(
+    "候选人已删除",
+    refreshSourcingKeywords
+      ? `${candidate.name}已移除，正在根据剩余正向案例更新寻访策略`
+      : `${candidate.name}已从当前岗位复核队列移除${contributedToSourcing ? "，原寻访关键词已保留" : ""}`
+  );
+  if (refreshSourcingKeywords && positiveSourcingCandidates(job).length) {
+    void generateSourcingKeywords({ silent: true });
+  }
 }
 
 function deleteSelectedCandidate() {

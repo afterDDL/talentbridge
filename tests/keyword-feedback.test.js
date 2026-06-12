@@ -52,7 +52,7 @@ const context = {
     setItem: (key, value) => storage.set(key, String(value)),
     removeItem: key => storage.delete(key)
   },
-  window: { location: { reload() {} } },
+  window: { location: { reload() {} }, confirm: () => false },
   navigator: { clipboard: { writeText: async () => {} } },
   fetch: async () => ({ ok: true, json: async () => ({ mode: "demo" }) }),
   indexedDB: {},
@@ -105,6 +105,21 @@ const checks = vm.runInContext(`
   const sourcingHubHtml = main.innerHTML;
   renderSourcingStrategy("chip");
   const strategyHtml = main.innerHTML;
+  const retainedInsight = state.sourcingInsights.chip;
+  window.confirm = () => false;
+  deleteCandidate("linjia");
+  const deleteCanKeepGeneratedKeywords = state.sourcingInsights.chip === retainedInsight
+    && !jobs.chip.candidates.some(candidate => candidate.id === "linjia");
+  state.sourcingInsights.chip = {
+    status: "ready",
+    result: { sampleSize: 1, technicalKeywords: [{term:"材料研发",sourceCount:1}] },
+    candidateIds: ["liuming"]
+  };
+  state.decisions = {};
+  window.confirm = () => true;
+  deleteCandidate("liuming");
+  const deleteCanRemoveGeneratedKeywords = !state.sourcingInsights.chip
+    && !jobs.chip.candidates.some(candidate => candidate.id === "liuming");
   ({
     demoSeedsSourcingInsight: builtInInsightReady,
     workflowHasSixSteps: ["定义岗位", "校准标准", "导入简历", "复核候选人", "回填结果", "优化寻访"].every(text => requirementHtml.includes(text)),
@@ -128,7 +143,9 @@ const checks = vm.runInContext(`
     strategyHasQuery: strategyHtml.includes("核心技术组合") && strategyHtml.includes("混合键合"),
     strategyHasCandidateCase: strategyHtml.includes("内置正向候选人案例") && strategyHtml.includes("林嘉") && strategyHtml.includes("ATS 漏选代表案例"),
     strategyHasClearFunctionLabel: strategyHtml.includes("当前功能 · 寻访策略") && strategyHtml.includes("把有效候选人的共同特征变成下一轮搜索词"),
-    strategyHasCopy: strategyHtml.includes("copy-sourcing-query") && strategyHtml.includes("copy-all-sourcing-keywords")
+    strategyHasCopy: strategyHtml.includes("copy-sourcing-query") && strategyHtml.includes("copy-all-sourcing-keywords"),
+    deleteCanKeepGeneratedKeywords,
+    deleteCanRemoveGeneratedKeywords
   });
 `, sandbox);
 
