@@ -7,3 +7,5 @@ __pycache__/
 .tools/
 cloudflare/dist/
 cloudflare/.wrangler/
+.tmp-cloudflare-types/
+cloudflare/worker-configuration.d.ts

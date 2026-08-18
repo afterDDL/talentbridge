@@ -195,7 +195,27 @@ function fallbackCompanyResearch(payload, pages = []) {
 async function readJson(request) {
   const length = Number(request.headers.get("content-length") || 0);
   if (length > MAX_JSON_BYTES) throw new Response(JSON.stringify({ error: "请求内容过大" }), { status: 413, headers: JSON_HEADERS });
-  try { return await request.json(); } catch { throw new Response(JSON.stringify({ error: "请求必须是有效 JSON" }), { status: 400, headers: JSON_HEADERS }); }
+  const reader = request.body?.getReader();
+  if (!reader) throw new Response(JSON.stringify({ error: "请求正文不能为空" }), { status: 400, headers: JSON_HEADERS });
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_JSON_BYTES) {
+      await reader.cancel();
+      throw new Response(JSON.stringify({ error: "请求内容过大" }), { status: 413, headers: JSON_HEADERS });
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try { return JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new Response(JSON.stringify({ error: "请求必须是有效 JSON" }), { status: 400, headers: JSON_HEADERS }); }
 }
 
 async function handleApi(request, env, pathname) {
