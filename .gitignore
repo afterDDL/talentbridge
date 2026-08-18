@@ -5,3 +5,5 @@ talentbridge-server.err.log
 __pycache__/
 *.pyc
 .tools/
+cloudflare/dist/
+cloudflare/.wrangler/

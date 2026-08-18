@@ -2443,15 +2443,6 @@ function addUploadFiles(fileList) {
   if (rejected.length) toast("部分文件未加入", rejected.slice(0, 2).join("；"));
 }
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
-    reader.onerror = () => reject(new Error(`无法读取 ${file.name}`));
-    reader.readAsDataURL(file);
-  });
-}
-
 function readFileAsText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -2691,64 +2682,41 @@ async function completeImport() {
       let successCount = 0;
       const failures = [];
       const privacyDetails = [];
-      if (state.privacyMode) {
-        for (let index = 0; index < state.uploadFiles.length; index += 1) {
-          const file = state.uploadFiles[index];
-          importConfirm.textContent = `本地解析 ${index + 1}/${state.uploadFiles.length}`;
+      for (let index = 0; index < state.uploadFiles.length; index += 1) {
+        const file = state.uploadFiles[index];
+        importConfirm.textContent = `本地解析 ${index + 1}/${state.uploadFiles.length}`;
+        try {
+          const rawResume = (await parseResumeLocally(file)).trim();
+          if (!rawResume) throw new Error("未提取到可分析的文本");
+          const identity = extractLocalIdentity(rawResume, file.name);
+          const redacted = state.privacyMode ? redactResume(rawResume, identity) : { text: rawResume, counts: {} };
+          const candidateId = `upload-${Date.now()}-${index}`;
+          importConfirm.textContent = `${state.privacyMode ? "发送脱敏文本" : "分析简历文本"} ${index + 1}/${state.uploadFiles.length}`;
+          let candidate;
           try {
-            const rawResume = (await parseResumeLocally(file)).trim();
-            if (!rawResume) throw new Error("未提取到可分析的文本");
-            const identity = extractLocalIdentity(rawResume, file.name);
-            const redacted = redactResume(rawResume, identity);
-            importConfirm.textContent = `发送脱敏文本 ${index + 1}/${state.uploadFiles.length}`;
             const data = await apiRequest("/api/analyze-resume", {
               resume: redacted.text,
               job: analysisJobPayload(job)
             });
-            const candidateId = `upload-${Date.now()}-${index}`;
-            const candidate = {
-              ...data.result,
-              name: identity || data.result.name,
-              id: candidateId,
-              custom: true,
-              sourceFile: file.name,
-              privacyProtected: true,
-              privacySummary: privacySummary(redacted.counts)
-            };
-            await storePrivateResume(candidateId, rawResume);
-            job.candidates.unshift(candidate);
-            successCount += 1;
-            privacyDetails.push(candidate.privacySummary);
-          } catch (error) {
-            failures.push({ name: file.name, error: error.message });
+            candidate = { ...data.result };
+          } catch {
+            candidate = buildCandidateFromText(rawResume, job);
+            delete candidate.rawResume;
           }
-        }
-      } else {
-        const files = await Promise.all(state.uploadFiles.map(async file => ({
-          name: file.name,
-          type: file.type,
-          data: await fileToBase64(file)
-        })));
-        importConfirm.textContent = "AI 正在逐份分析";
-        const data = await apiRequest("/api/upload-resumes", {
-          files,
-          job: analysisJobPayload(job)
-        });
-        for (let index = 0; index < data.results.length; index += 1) {
-          const item = data.results[index];
-          if (item.status !== "success") {
-            failures.push(item);
-            continue;
-          }
-          const candidateId = `upload-${Date.now()}-${index}`;
-          job.candidates.unshift({
-            ...item.result,
+          Object.assign(candidate, {
+            name: identity || candidate.name,
             id: candidateId,
             custom: true,
-            sourceFile: item.name
+            sourceFile: file.name,
+            privacyProtected: state.privacyMode,
+            privacySummary: state.privacyMode ? privacySummary(redacted.counts) : ""
           });
-          await storePrivateResume(candidateId, item.resume);
+          await storePrivateResume(candidateId, rawResume);
+          job.candidates.unshift(candidate);
           successCount += 1;
+          if (state.privacyMode) privacyDetails.push(candidate.privacySummary);
+        } catch (error) {
+          failures.push({ name: file.name, error: error.message });
         }
       }
       state.imported[job.id] = successCount > 0 || state.imported[job.id];
@@ -2762,7 +2730,7 @@ async function completeImport() {
           ? `${failures.length} 份失败：${failures[0].name}（${failures[0].error}）`
           : state.privacyMode
             ? `原始文件未上传；已自动处理${privacyDetails[0] || "敏感字段"}`
-            : "候选人已加入当前岗位复核队列"
+            : "原始文件仅在浏览器解析；候选人已加入复核队列"
       );
     } catch (error) {
       toast("批量分析失败", error.message);
